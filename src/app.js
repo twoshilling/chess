@@ -147,7 +147,7 @@
         setTimeout(function () { pe.classList.remove('mv'); }, 260);
       }
     }
-    drawStrip();
+    drawStrip(); renderRibbon();
   }
   function drawStrip() {
     var h = game.history(), out = $('#strip'); out.textContent = '';
@@ -225,12 +225,34 @@
 
   /* ---------- coach feed ---------- */
   var feed = $('#feed');
-  function clearFeed() { feed.textContent = ''; }
+  /* The coach panel shows one thing at a time: a row of move chips, a caption, one prompt or verdict, one secondary line. */
+  var ribbonEl = $('#ribbon'), rnoteEl = $('#rnote'), slotEl = $('#slot'), subEl = $('#sub');
+  var noteBy = {}, ribStart = 0, inDemo = false;
+  function setSlot(kind, text) { slotEl.className = 'slot ' + kind; slotEl.textContent = text || ''; }
+  function setSub(text) { subEl.textContent = text || ''; }
+  function setNote(text) { rnoteEl.textContent = text || ''; }
+  function clearFeed() { feed.textContent = ''; setSlot('', ''); setSub(''); }
+  function restoreNote() { var h = game.history(), n = noteBy[h.length]; setNote(n && n.san === h[h.length - 1] && (n.kind === 'black' || n.kind === 'white') ? n.text : ''); }
+  function resetRibbon(start) { noteBy = {}; ribStart = start; setNote(''); }
+  function renderRibbon() {
+    var h = game.history(), start = mode === 'spar' ? Math.max(ribStart, h.length - 2) : ribStart;
+    ribbonEl.textContent = '';
+    for (var i = start; i < h.length; i++) (function (ply) {
+      var n = noteBy[ply], ok = n && n.san === h[ply - 1], mineMove = ((ply % 2 === 1) ? 'w' : 'b') === side;
+      var c = el('button', 'rc ' + (ok ? n.kind : '') + (mineMove ? ' me' : ' them'), (ok && n.kind === 'good' ? '\u2713 ' : '') + h[ply - 1]);
+      c.type = 'button';
+      if (ok && n.text) c.addEventListener('click', function () { setNote(n.text); }); else c.disabled = true;
+      ribbonEl.appendChild(c);
+    })(i + 1);
+  }
   function say(kind, text, san) {
-    var m = el('div', 'msg ' + kind);
-    if (san) m.appendChild(el('span', 'mv', san));
-    m.appendChild(document.createTextNode(text || ''));
-    feed.appendChild(m); feed.scrollTop = feed.scrollHeight; return m;
+    if (san) noteBy[game.history().length] = { san: san, kind: kind, text: text || '' };
+    if (kind === 'black' || kind === 'white') {
+      if (inDemo) setSlot('demo', text); else setNote(text);
+    } else if (kind === 'info') setSub(text);
+    else { setSlot(kind === 'tip' ? 'ask' : kind, text); if (kind !== 'ask' && kind !== 'tip') setSub(''); }
+    renderRibbon();
+    return slotEl;
   }
   function actions(list, note) {
     var row = el('div', 'acts');
@@ -292,12 +314,13 @@
     if (b) {
       sfx('bad');
       if (b.line) {
-        say('bad', 'Watch.', san);
+        say('bad', 'Watch.', san); inDemo = true; setNote('');
         for (var i = 0; i < b.line.length; i++) {
-          await wait(i === 0 ? 800 : 1250); if (my !== run) return 'x';
+          await wait(i === 0 ? 800 : 1500); if (my !== run) { inDemo = false; return 'x'; }
           var m = playSan(b.line[i], b.draws[i]);
           say(m.color === 'b' ? 'black' : 'white', b.notes[i], m.san);
         }
+        inDemo = false;
         await wait(600); if (my !== run) return 'x';
       } else say('bad', b.text, san);
       collectCard(b.name);
@@ -327,28 +350,24 @@
   function startLesson(idx, stepIdx) {
     run++; li = idx; si = stepIdx || 0;
     var L = LESSONS[li];
-    clearFeed(); lastGood = null; setGame(basePosition(L, si));
+    clearFeed(); lastGood = null; inDemo = false; resetRibbon(L.setup.length); setGame(basePosition(L, si));
     renderRail(); renderUnder(); askStep();
   }
   function header() {
     var L = LESSONS[li], prog = $('#prog'); prog.textContent = '';
     if (mode === 'learn') {
-      var mineIdx = []; LESSONS.forEach(function (x, i) { if (mine(i)) mineIdx.push(i); });
-      $('#ceye').textContent = L.group + ' · lesson ' + (mineIdx.indexOf(li) + 1) + ' of ' + mineIdx.length;
       $('#ctitle').textContent = L.title;
       L.steps.forEach(function (s, i) { prog.appendChild(el('i', i < si ? 'on' : i === si ? 'cur' : '')); });
     } else if (mode === 'drill') {
-      $('#ceye').textContent = 'Drill · one try per position';
-      $('#ctitle').textContent = drill.cur ? LESSONS[drill.cur.li].title : 'Drill';
+      $('#ctitle').textContent = 'Drill · ' + (drill.cur ? LESSONS[drill.cur.li].title : '');
     } else if (mode === 'spar') {
-      $('#ceye').textContent = 'Sparring · you are ' + (side === 'w' ? 'White' : 'Black');
-      $('#ctitle').textContent = 'Play it out';
+      $('#ctitle').textContent = 'Sparring as ' + (side === 'w' ? 'White' : 'Black');
     }
   }
   function askStep(reply) {
     var L = LESSONS[li], s = L.steps[si]; tries = 0;
     header(); clearFeed();
-    if (lastGood) { lastGood.classList.add('old'); feed.appendChild(lastGood); lastGood = null; }
+    lastGood = null;
     if (si === 0 && !reply) say('info', L.intro);
     if (reply) say(side === 'w' ? 'black' : 'white', reply.note || '', reply.san);
     if (s.pre) { tapQ = s.pre; tapMiss = 0; tapFound = []; arrows = []; marks = []; say('ask', s.pre.q); locked = true; draw(); return; }
@@ -424,7 +443,14 @@
     }
     tries++;
     var kind = await showWrong(s, mv, my); if (kind === 'x') return;
-    function back() { rewind(fen); seeDecor(s); if (tries >= 2) say('info', 'Hint: ' + s.hint); if (tries >= 3) { var m = game.move(mainOf(s)); game.undo(); hintSq = m.from; } locked = false; draw(); }
+    function back() {
+      var said = (kind === 'ok' || kind === 'miss') ? san + ': ' + slotEl.textContent : '';
+      rewind(fen); seeDecor(s); feed.textContent = ''; restoreNote();
+      setSlot('ask', s.ask);
+      setSub((said ? said + ' ' : '') + (tries >= 2 || kind === 'miss' ? 'Hint: ' + s.hint : ''));
+      if (tries >= 3) { var m = game.move(mainOf(s)); game.undo(); hintSq = m.from; }
+      locked = false; draw();
+    }
     if (kind === 'bad' || kind === 'auto') actions([{ label: 'Take it back', go: back }]);
     else { await wait(kind === 'ok' ? 1400 : 700); if (my !== run) return; back(); }
   }
@@ -483,7 +509,7 @@
     while (i < POOL.length - 1 && (x -= weights[i]) > 0) i++;
     drill.cur = POOL[i]; li = drill.cur.li; si = drill.cur.si;
     var L = LESSONS[li], s = L.steps[si];
-    clearFeed(); lastGood = null; setGame(basePosition(L, si)); header(); renderRail();
+    clearFeed(); lastGood = null; inDemo = false; setGame(basePosition(L, si)); resetRibbon(game.history().length); header(); renderRail();
     say('ask', s.ask);
     if (s.pre) marks = [s.pre.target || s.pre.sq];
     locked = false; draw();
@@ -1047,7 +1073,7 @@
     var g = new Chess();
     if (side === 'w') ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4'].forEach(function (m) { g.move(m); });
     else spar.fam = FAMILY[pick(FAMPICK[spar.wopen] || FAMPICK.any)];
-    clearFeed(); setGame(g); header(); renderRail(); renderUnder();
+    clearFeed(); inDemo = false; resetRibbon(side === 'w' ? 5 : 0); setGame(g); header(); renderRail(); renderUnder();
     say('info', side === 'w' ? 'Black replies, then it is a real game.' : 'White opens. You do not know with what.');
     botMove(true);
   }

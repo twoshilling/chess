@@ -145,12 +145,26 @@ h1 em{font-weight:500;color:var(--accent)}
 
 /* coach */
 .coach{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
-.chead{padding:14px 18px 12px;border-bottom:1px solid var(--line)}
-.chead .eyebrow{display:block}
-.prog{display:flex;gap:4px;margin-top:10px}
-.prog i{flex:1;height:4px;border-radius:2px;background:var(--sunk)}
+.chead{padding:12px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px}
+.coach .chead h2{font-family:var(--body);font-style:normal;font-weight:600;font-size:14px;color:var(--muted);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.prog{display:flex;gap:5px;flex:none}
+.prog i{width:7px;height:7px;border-radius:50%;background:var(--line)}
 .prog i.on{background:var(--accent)} .prog i.cur{background:var(--gold)}
-.feed{padding:16px 18px 20px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;max-height:min(62vh,560px);min-height:220px;scroll-behavior:smooth}
+.cbody{padding:14px 18px 18px;display:flex;flex-direction:column;min-height:250px}
+.ribbon{display:flex;flex-wrap:wrap;gap:6px;min-height:26px}
+.rc{font-family:var(--mono);font-size:12.5px;font-weight:600;line-height:1;padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:none;color:var(--muted)}
+.rc:disabled{cursor:default}
+.rc.me{color:var(--ink)}
+.rc.good{background:var(--good-bg);border-color:transparent;color:var(--accent)}
+.rc.ok{background:var(--amber-bg);border-color:transparent;color:var(--amber)}
+.rc.bad,.rc.miss{background:var(--hot-bg);border-color:transparent;color:var(--hot)}
+.rnote{margin:8px 0 0;font-size:14px;line-height:1.4;color:var(--muted);min-height:20px}
+.slot{margin:18px 0 0;font-size:21px;font-weight:600;line-height:1.3;text-wrap:balance;max-width:26ch}
+.slot.good{color:var(--accent)} .slot.ok{color:var(--amber)} .slot.bad,.slot.miss{color:var(--hot)} .slot.demo{color:var(--ink);font-weight:500}
+.slot:empty,.sub:empty{display:none}
+.sub{margin:8px 0 0;font-size:14.5px;line-height:1.4;color:var(--muted);max-width:44ch}
+.feed{margin-top:16px;display:flex;flex-direction:column;gap:10px}
+.feed:empty{display:none}
 .msg{max-width:60ch;font-size:15.5px}
 .msg .mv{font-family:var(--mono);font-weight:600;font-size:13.5px;padding:2px 7px;border-radius:5px;margin-right:8px;white-space:nowrap}
 .msg.info{color:var(--muted)}
@@ -198,11 +212,11 @@ h1 em{font-weight:500;color:var(--accent)}
 @media (max-width:700px){
   .wrap{padding:14px 16px 32px}
   .stage{grid-template-columns:1fr;gap:16px}
-  .feed{max-height:46vh;min-height:180px}
+  .cbody{min-height:210px}
   .tabs{width:100%;justify-content:space-between}
   .tabs button{flex:1;padding:8px 6px}
 }
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.feed{scroll-behavior:auto}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
@@ -244,12 +258,17 @@ h1 em{font-weight:500;color:var(--accent)}
     </section>
     <section class="coach" aria-live="polite">
       <div class="chead">
-        <span class="eyebrow" id="ceye"></span>
         <h2 id="ctitle"></h2>
         <div class="prog" id="prog"></div>
       </div>
       <div class="focus" id="focus" hidden></div>
-      <div class="feed" id="feed"></div>
+      <div class="cbody">
+        <div class="ribbon" id="ribbon"></div>
+        <p class="rnote" id="rnote"></p>
+        <p class="slot" id="slot"></p>
+        <p class="sub" id="sub"></p>
+        <div class="feed" id="feed"></div>
+      </div>
     </section>
   </main>
 
@@ -1172,7 +1191,7 @@ const BOOK_EXTRA_B = [
         setTimeout(function () { pe.classList.remove('mv'); }, 260);
       }
     }
-    drawStrip();
+    drawStrip(); renderRibbon();
   }
   function drawStrip() {
     var h = game.history(), out = $('#strip'); out.textContent = '';
@@ -1250,12 +1269,34 @@ const BOOK_EXTRA_B = [
 
   /* ---------- coach feed ---------- */
   var feed = $('#feed');
-  function clearFeed() { feed.textContent = ''; }
+  /* The coach panel shows one thing at a time: a row of move chips, a caption, one prompt or verdict, one secondary line. */
+  var ribbonEl = $('#ribbon'), rnoteEl = $('#rnote'), slotEl = $('#slot'), subEl = $('#sub');
+  var noteBy = {}, ribStart = 0, inDemo = false;
+  function setSlot(kind, text) { slotEl.className = 'slot ' + kind; slotEl.textContent = text || ''; }
+  function setSub(text) { subEl.textContent = text || ''; }
+  function setNote(text) { rnoteEl.textContent = text || ''; }
+  function clearFeed() { feed.textContent = ''; setSlot('', ''); setSub(''); }
+  function restoreNote() { var h = game.history(), n = noteBy[h.length]; setNote(n && n.san === h[h.length - 1] && (n.kind === 'black' || n.kind === 'white') ? n.text : ''); }
+  function resetRibbon(start) { noteBy = {}; ribStart = start; setNote(''); }
+  function renderRibbon() {
+    var h = game.history(), start = mode === 'spar' ? Math.max(ribStart, h.length - 2) : ribStart;
+    ribbonEl.textContent = '';
+    for (var i = start; i < h.length; i++) (function (ply) {
+      var n = noteBy[ply], ok = n && n.san === h[ply - 1], mineMove = ((ply % 2 === 1) ? 'w' : 'b') === side;
+      var c = el('button', 'rc ' + (ok ? n.kind : '') + (mineMove ? ' me' : ' them'), (ok && n.kind === 'good' ? '\u2713 ' : '') + h[ply - 1]);
+      c.type = 'button';
+      if (ok && n.text) c.addEventListener('click', function () { setNote(n.text); }); else c.disabled = true;
+      ribbonEl.appendChild(c);
+    })(i + 1);
+  }
   function say(kind, text, san) {
-    var m = el('div', 'msg ' + kind);
-    if (san) m.appendChild(el('span', 'mv', san));
-    m.appendChild(document.createTextNode(text || ''));
-    feed.appendChild(m); feed.scrollTop = feed.scrollHeight; return m;
+    if (san) noteBy[game.history().length] = { san: san, kind: kind, text: text || '' };
+    if (kind === 'black' || kind === 'white') {
+      if (inDemo) setSlot('demo', text); else setNote(text);
+    } else if (kind === 'info') setSub(text);
+    else { setSlot(kind === 'tip' ? 'ask' : kind, text); if (kind !== 'ask' && kind !== 'tip') setSub(''); }
+    renderRibbon();
+    return slotEl;
   }
   function actions(list, note) {
     var row = el('div', 'acts');
@@ -1317,12 +1358,13 @@ const BOOK_EXTRA_B = [
     if (b) {
       sfx('bad');
       if (b.line) {
-        say('bad', 'Watch.', san);
+        say('bad', 'Watch.', san); inDemo = true; setNote('');
         for (var i = 0; i < b.line.length; i++) {
-          await wait(i === 0 ? 800 : 1250); if (my !== run) return 'x';
+          await wait(i === 0 ? 800 : 1500); if (my !== run) { inDemo = false; return 'x'; }
           var m = playSan(b.line[i], b.draws[i]);
           say(m.color === 'b' ? 'black' : 'white', b.notes[i], m.san);
         }
+        inDemo = false;
         await wait(600); if (my !== run) return 'x';
       } else say('bad', b.text, san);
       collectCard(b.name);
@@ -1352,28 +1394,24 @@ const BOOK_EXTRA_B = [
   function startLesson(idx, stepIdx) {
     run++; li = idx; si = stepIdx || 0;
     var L = LESSONS[li];
-    clearFeed(); lastGood = null; setGame(basePosition(L, si));
+    clearFeed(); lastGood = null; inDemo = false; resetRibbon(L.setup.length); setGame(basePosition(L, si));
     renderRail(); renderUnder(); askStep();
   }
   function header() {
     var L = LESSONS[li], prog = $('#prog'); prog.textContent = '';
     if (mode === 'learn') {
-      var mineIdx = []; LESSONS.forEach(function (x, i) { if (mine(i)) mineIdx.push(i); });
-      $('#ceye').textContent = L.group + ' · lesson ' + (mineIdx.indexOf(li) + 1) + ' of ' + mineIdx.length;
       $('#ctitle').textContent = L.title;
       L.steps.forEach(function (s, i) { prog.appendChild(el('i', i < si ? 'on' : i === si ? 'cur' : '')); });
     } else if (mode === 'drill') {
-      $('#ceye').textContent = 'Drill · one try per position';
-      $('#ctitle').textContent = drill.cur ? LESSONS[drill.cur.li].title : 'Drill';
+      $('#ctitle').textContent = 'Drill · ' + (drill.cur ? LESSONS[drill.cur.li].title : '');
     } else if (mode === 'spar') {
-      $('#ceye').textContent = 'Sparring · you are ' + (side === 'w' ? 'White' : 'Black');
-      $('#ctitle').textContent = 'Play it out';
+      $('#ctitle').textContent = 'Sparring as ' + (side === 'w' ? 'White' : 'Black');
     }
   }
   function askStep(reply) {
     var L = LESSONS[li], s = L.steps[si]; tries = 0;
     header(); clearFeed();
-    if (lastGood) { lastGood.classList.add('old'); feed.appendChild(lastGood); lastGood = null; }
+    lastGood = null;
     if (si === 0 && !reply) say('info', L.intro);
     if (reply) say(side === 'w' ? 'black' : 'white', reply.note || '', reply.san);
     if (s.pre) { tapQ = s.pre; tapMiss = 0; tapFound = []; arrows = []; marks = []; say('ask', s.pre.q); locked = true; draw(); return; }
@@ -1449,7 +1487,14 @@ const BOOK_EXTRA_B = [
     }
     tries++;
     var kind = await showWrong(s, mv, my); if (kind === 'x') return;
-    function back() { rewind(fen); seeDecor(s); if (tries >= 2) say('info', 'Hint: ' + s.hint); if (tries >= 3) { var m = game.move(mainOf(s)); game.undo(); hintSq = m.from; } locked = false; draw(); }
+    function back() {
+      var said = (kind === 'ok' || kind === 'miss') ? san + ': ' + slotEl.textContent : '';
+      rewind(fen); seeDecor(s); feed.textContent = ''; restoreNote();
+      setSlot('ask', s.ask);
+      setSub((said ? said + ' ' : '') + (tries >= 2 || kind === 'miss' ? 'Hint: ' + s.hint : ''));
+      if (tries >= 3) { var m = game.move(mainOf(s)); game.undo(); hintSq = m.from; }
+      locked = false; draw();
+    }
     if (kind === 'bad' || kind === 'auto') actions([{ label: 'Take it back', go: back }]);
     else { await wait(kind === 'ok' ? 1400 : 700); if (my !== run) return; back(); }
   }
@@ -1508,7 +1553,7 @@ const BOOK_EXTRA_B = [
     while (i < POOL.length - 1 && (x -= weights[i]) > 0) i++;
     drill.cur = POOL[i]; li = drill.cur.li; si = drill.cur.si;
     var L = LESSONS[li], s = L.steps[si];
-    clearFeed(); lastGood = null; setGame(basePosition(L, si)); header(); renderRail();
+    clearFeed(); lastGood = null; inDemo = false; setGame(basePosition(L, si)); resetRibbon(game.history().length); header(); renderRail();
     say('ask', s.ask);
     if (s.pre) marks = [s.pre.target || s.pre.sq];
     locked = false; draw();
@@ -2072,7 +2117,7 @@ const BOOK_EXTRA_B = [
     var g = new Chess();
     if (side === 'w') ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4'].forEach(function (m) { g.move(m); });
     else spar.fam = FAMILY[pick(FAMPICK[spar.wopen] || FAMPICK.any)];
-    clearFeed(); setGame(g); header(); renderRail(); renderUnder();
+    clearFeed(); inDemo = false; resetRibbon(side === 'w' ? 5 : 0); setGame(g); header(); renderRail(); renderUnder();
     say('info', side === 'w' ? 'Black replies, then it is a real game.' : 'White opens. You do not know with what.');
     botMove(true);
   }
