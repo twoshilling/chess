@@ -10,6 +10,10 @@
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
   function mainOf(s) { return Object.keys(s.good)[0]; }
+  var phoneMq = window.matchMedia ? window.matchMedia('(max-width: 700px)') : { matches: false };
+  function phone() { return phoneMq.matches; }
+  function askText(s) { return phone() && s.short ? s.short : s.ask; }
+  function preText(q) { return phone() && q.qs ? q.qs : q.q; }
 
   /* ---------- saved progress (this browser only) ---------- */
   var store = { done: {}, found: {}, drill: {}, best: 0, coach: true, sound: true, guide: true, glevel: 2, gstreak: 0, gmiss: 0 };
@@ -234,7 +238,17 @@
   function clearFeed() { feed.textContent = ''; setSlot('', ''); setSub(''); }
   function restoreNote() { var h = game.history(), n = noteBy[h.length]; setNote(n && n.san === h[h.length - 1] && (n.kind === 'black' || n.kind === 'white') ? n.text : ''); }
   function resetRibbon(start) { noteBy = {}; ribStart = start; setNote(''); }
+  function renderLabel() {
+    var h = game.history(), ml = $('#mlabel-l'); if (!ml) return;
+    if (!h.length) { ml.textContent = ''; ml.className = ''; return; }
+    var ply = h.length, n = noteBy[ply], ok = n && n.san === h[ply - 1];
+    var t = Math.ceil(ply / 2) + (ply % 2 ? '. ' : '... ') + h[ply - 1];
+    if (ok && n.kind === 'good') t = '\u2713 ' + t;
+    if (ok && (n.kind === 'black' || n.kind === 'white') && n.text && !inDemo) t += '  \u00b7  ' + n.text;
+    ml.textContent = t; ml.className = ok ? n.kind : '';
+  }
   function renderRibbon() {
+    renderLabel();
     var h = game.history(), start = mode === 'spar' ? Math.max(ribStart, h.length - 2) : ribStart;
     ribbonEl.textContent = '';
     for (var i = start; i < h.length; i++) (function (ply) {
@@ -370,13 +384,13 @@
     lastGood = null;
     if (si === 0 && !reply) say('info', L.intro);
     if (reply) say(side === 'w' ? 'black' : 'white', reply.note || '', reply.san);
-    if (s.pre) { tapQ = s.pre; tapMiss = 0; tapFound = []; arrows = []; marks = []; say('ask', s.pre.q); locked = true; draw(); return; }
+    if (s.pre) { tapQ = s.pre; tapMiss = 0; tapFound = []; arrows = []; marks = []; say('ask', preText(s.pre)); locked = true; draw(); return; }
     askMove();
   }
   function seeDecor(s, extra) { arrows = (s.see || []).slice(); marks = (s.seeMarks || []).concat(extra || []); }
   function askMove(extraMarks) {
     var s = LESSONS[li].steps[si];
-    say('ask', s.ask); seeDecor(s, extraMarks); badge = null; locked = false; draw();
+    say('ask', askText(s)); seeDecor(s, extraMarks); badge = null; locked = false; draw();
   }
   function tapAnswer(sq) {
     var q = tapQ, my = run, list = q.sqs || [q.sq];
@@ -446,7 +460,7 @@
     function back() {
       var said = (kind === 'ok' || kind === 'miss') ? san + ': ' + slotEl.textContent : '';
       rewind(fen); seeDecor(s); feed.textContent = ''; restoreNote();
-      setSlot('ask', s.ask);
+      setSlot('ask', askText(s));
       setSub((said ? said + ' ' : '') + (tries >= 2 || kind === 'miss' ? 'Hint: ' + s.hint : ''));
       if (tries >= 3) { var m = game.move(mainOf(s)); game.undo(); hintSq = m.from; }
       locked = false; draw();
@@ -510,7 +524,7 @@
     drill.cur = POOL[i]; li = drill.cur.li; si = drill.cur.si;
     var L = LESSONS[li], s = L.steps[si];
     clearFeed(); lastGood = null; inDemo = false; setGame(basePosition(L, si)); resetRibbon(game.history().length); header(); renderRail();
-    say('ask', s.ask);
+    say('ask', askText(s));
     if (s.pre) marks = [s.pre.target || s.pre.sq];
     locked = false; draw();
   }
@@ -627,8 +641,11 @@
   var PRINCIPLES = ['Repetition', 'Safety', 'Checks first', 'Free material', 'King safety', 'Activity', 'Attack the king', 'Trade when ahead', 'Open lines', 'Small improvements'];
   var GLABEL = ['', 'Guide: show me', 'Guide: ask me', 'Guide: ask me (hard)', 'Guide: off'];
   function showFocus(f) {
-    focus = f; focusEl.textContent = '';
-    focusEl.hidden = !f; if (!f) return;
+    focus = f; focusEl.textContent = ''; focusEl.className = 'focus';
+    focusEl.hidden = !f; $('#stage').classList.toggle('focus-on', !!f); $('#mlabel-r').textContent = f ? (f.name === 'Your opening' ? 'From your lessons' : 'Your priority') : '';
+    if (!f) return;
+    var lastEl = $('#last'), kind = (slotEl.className.match(/good|ok|bad/) || [''])[0];
+    lastEl.className = 'lastv ' + kind; lastEl.textContent = kind ? ((kind === 'good' ? '\u2713 ' : '') + slotEl.textContent + (subEl.textContent ? '  \u00b7  ' + subEl.textContent : '')) : '';
     if (store.glevel === 1 || f.name === 'Your opening') revealFocus(f); else quizFocus(f);
   }
   function quizFocus(f) {
@@ -640,9 +657,10 @@
       names = [f.name, pool[0], pool[1]].sort(function () { return Math.random() - 0.5; });
     }
     arrows = []; marks = []; draw();
+    focusEl.className = 'focus quiz';
     focusEl.appendChild(el('span', 'eyebrow', 'Before you move'));
     focusEl.appendChild(el('strong', '', 'What matters most here?'));
-    var row = el('div', 'acts');
+    var row = el('div', 'acts seg');
     names.forEach(function (n) {
       var b = el('button', 'chip plan', n); b.type = 'button';
       b.addEventListener('click', function () {
@@ -650,7 +668,7 @@
         if (n === f.name) {
           sfx('good');
           if (first) { store.gstreak++; store.gmiss = 0; } save();
-          focusEl.textContent = ''; revealFocus(f, first ? 'Right.' : 'Yes, this one.'); levelCheck();
+          focusEl.textContent = ''; focusEl.className = 'focus'; revealFocus(f, first ? 'Right.' : 'Yes, this one.'); levelCheck();
         } else { first = false; store.gstreak = 0; store.gmiss++; save(); b.disabled = true; b.classList.add('no'); sfx('bad'); }
       });
       row.appendChild(b);
@@ -663,10 +681,15 @@
     else if (store.glevel === 3 && store.gmiss >= 3) { store.glevel = 2; store.gmiss = 0; save(); renderUnder(); say('info', 'Back to a shortlist of three for now.'); }
   }
   function revealFocus(f, verdict) {
+    focusEl.classList.add('shown');
     focusEl.appendChild(el('span', 'eyebrow', verdict || 'This move: think about'));
-    focusEl.appendChild(el('strong', '', f.name));
-    focusEl.appendChild(el('p', '', f.text));
-    if (f.why) { var w = el('p', 'why'); w.appendChild(el('b', '', 'Why now: ')); w.appendChild(document.createTextNode(f.why)); focusEl.appendChild(w); }
+    var head = el('button', 'fname'); head.type = 'button'; head.appendChild(el('strong', '', f.name));
+    head.addEventListener('click', function () { focusEl.classList.toggle('open'); });
+    focusEl.appendChild(head);
+    var det = el('div', 'fdetail'); focusEl.appendChild(det);
+    det.appendChild(el('p', '', f.name === 'Your opening' && phone() ? f.text.replace(/ \([^)]*\)$/, '') : f.text));
+    if (f.why) { var w = el('p', 'why'); w.appendChild(el('b', '', 'Why now: ')); w.appendChild(document.createTextNode(f.why)); det.appendChild(w); }
+    if (f.name === 'Your opening') focusEl.classList.add('open');
     var chips = (f.chips || []).slice();
     if (f.name !== 'Your opening') chips.push({ label: 'Show the move', go: function () {
       hintLine('Thinking...');
@@ -682,7 +705,7 @@
           if (ex.line.length > 1 && !focusEl.querySelector('.lineplay')) {
             var b = el('button', 'chip plan lineplay', 'Play it through'); b.type = 'button';
             b.addEventListener('click', function () { if (!locked && focus === f && game.fen() === fen) playIgnore(lineFrames(ex.line), 'Here is how it goes.'); });
-            focusEl.appendChild(b);
+            det.appendChild(b);
           }
         });
       });
@@ -691,7 +714,7 @@
     if (chips.length) {
       var row = el('div', 'acts');
       chips.forEach(function (c) { var b = el('button', 'chip plan', c.label); b.type = 'button'; b.addEventListener('click', function () { if (!locked && focus === f) c.go(); }); row.appendChild(b); });
-      focusEl.appendChild(row);
+      det.appendChild(row);
     }
     arrows = f.arrows || []; marks = f.marks || []; draw();
   }
@@ -923,7 +946,7 @@
     return n;
   }
   function mobility(sq, g) { g = g || game; var p = g.get(sq), n = 0; attacksFrom(sq, g).forEach(function (t) { var q = g.get(t); if (!q || q.color !== p.color) n++; }); return n; }
-  function hintLine(t) { var o = focusEl.querySelector('.hintline'); if (!o) { o = el('p', 'why hintline'); focusEl.appendChild(o); } o.textContent = t; }
+  function hintLine(t) { var o = focusEl.querySelector('.hintline'), d = focusEl.querySelector('.fdetail') || focusEl; if (!o) { o = el('p', 'why hintline'); d.appendChild(o); } o.textContent = t; focusEl.classList.add('open'); }
   /* Two-step hint: first the piece, then the square. */
   function stepHint(steps) { var i = 0; return { label: 'Hint', go: function () { var st = steps[Math.min(i, steps.length - 1)]; i++; marks = st.marks || []; arrows = st.arrows || []; hintLine(st.text); draw(); } }; }
   function safeMoves(filter) {
@@ -1153,8 +1176,8 @@
       if (my !== run) return;
       var praised = false;
       if (store.guide && f && f.met && !p) {
-        if (f.met(mv)) { praised = true; sfx('good'); badge = { sq: mv.to, kind: 'yes' }; draw(); say('good', f.name + ': ' + (f.after ? f.after(mv) : f.done.charAt(0).toLowerCase() + f.done.slice(1)), mv.san); }
-        else if (f.still) { var stl = f.still(mv); if (stl) say('ok', f.name + ': ' + stl, mv.san); }
+        if (f.met(mv)) { praised = true; sfx('good'); badge = { sq: mv.to, kind: 'yes' }; draw(); if (phone()) { say('good', f.done, mv.san); var af = f.after ? f.after(mv) : ''; setSub(af ? af.charAt(0).toUpperCase() + af.slice(1) : ''); } else say('good', f.name + ': ' + (f.after ? f.after(mv) : f.done.charAt(0).toLowerCase() + f.done.slice(1)), mv.san); }
+        else if (f.still) { var stl = f.still(mv); if (stl) { if (phone()) { say('ok', f.name, mv.san); setSub(stl.charAt(0).toUpperCase() + stl.slice(1)); } else say('ok', f.name + ': ' + stl, mv.san); } }
       }
       if (store.coach && !praised && p) {
         spar.alarms++;
@@ -1226,19 +1249,20 @@
   }
   function renderUnder() {
     var u = $('#under'); u.textContent = '';
-    function btn(label, fn) { var b = el('button', 'btn', label); b.type = 'button'; b.addEventListener('click', fn); u.appendChild(b); }
-    if (mode === 'learn') { btn('Hint', hint); btn('Show me the move', showMove); btn('Restart lesson', function () { lessonOver = false; startLesson(li); }); }
-    else if (mode === 'drill') { btn('Skip this one', nextDrill); }
+    function btn(label, fn, short) { var b = el('button', 'btn' + (short ? '' : ' sec'), label); b.type = 'button'; if (short) b.dataset.short = short; b.addEventListener('click', fn); u.appendChild(b); return b; }
+    if (mode === 'learn') { btn('Hint', hint, 'Hint'); btn('Show me the move', showMove, 'Show'); btn('Restart lesson', restart); }
+    else if (mode === 'drill') { btn('Skip this one', nextDrill, 'Skip'); }
     else if (mode === 'spar') {
-      btn('New game', newSpar); btn('Take back a move', sparUndo);
-      var gb = el('button', 'btn' + (store.guide ? ' pri' : ''), GLABEL[store.glevel]); gb.type = 'button'; gb.id = 'guide';
-      gb.addEventListener('click', function () {
+      btn('New game', newSpar); btn('Take back a move', sparUndo, 'Undo');
+      var gb = btn(GLABEL[store.glevel], function () {
         store.glevel = store.glevel % 4 + 1; store.guide = store.glevel < 4; store.gstreak = 0; store.gmiss = 0; save(); renderUnder();
         if (store.guide && !locked) guideNow(); else { showFocus(null); if (!locked) { clearDecor(); draw(); } }
-      });
-      u.appendChild(gb);
+      }, GLABEL[store.glevel]);
+      gb.id = 'guide'; if (store.guide) gb.classList.add('pri');
     }
+    var mr = $('#m-restart'); if (mr) mr.textContent = mode === 'spar' ? 'New game' : mode === 'drill' ? 'Skip this one' : 'Restart lesson';
   }
+  function restart() { lessonOver = false; if (mode === 'spar') newSpar(); else if (mode === 'drill') nextDrill(); else if (mode === 'learn') startLesson(li); }
 
   /* ---------- modes ---------- */
   function setMode(m, data) {
@@ -1262,8 +1286,14 @@
   document.querySelectorAll('.sides button').forEach(function (b) {
     b.addEventListener('click', function () { if (b.dataset.side === side) return; side = b.dataset.side; store.side = side; save(); sideLabel(); drill.cur = null; buildBoard(); setMode(mode); });
   });
+  var menu = $('#menu');
+  $('#more').addEventListener('click', function (e) { e.stopPropagation(); menu.hidden = !menu.hidden; });
+  document.addEventListener('click', function () { menu.hidden = true; });
+  $('#m-rules').addEventListener('click', function () { try { location.hash = 'rules'; } catch (e) {} setMode('rules'); });
+  $('#m-restart').addEventListener('click', function () { if (mode === 'rules') return; restart(); });
+  $('#m-sound').addEventListener('click', function () { store.sound = !store.sound; save(); soundLabel(); sfx('move'); });
   var sb = $('#sound');
-  function soundLabel() { sb.textContent = store.sound ? 'Sound on' : 'Sound off'; sb.setAttribute('aria-pressed', store.sound ? 'true' : 'false'); }
+  function soundLabel() { $('#m-sound').textContent = store.sound ? 'Sound: on' : 'Sound: off'; sb.textContent = store.sound ? 'Sound on' : 'Sound off'; sb.setAttribute('aria-pressed', store.sound ? 'true' : 'false'); }
   sb.addEventListener('click', function () { store.sound = !store.sound; save(); soundLabel(); sfx('move'); });
   soundLabel();
   window.addEventListener('hashchange', function () { var h = location.hash.slice(1); if (h && h !== mode) setMode(h); });

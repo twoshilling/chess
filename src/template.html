@@ -209,12 +209,68 @@ h1 em{font-weight:500;color:var(--accent)}
   .rail{grid-column:1/-1;order:3}
   .lessons{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
 }
+.mlabel,.more,.lastv{display:none}
+.fname{all:unset;display:block}
+.focus .fname strong{margin:4px 0 6px}
 @media (max-width:700px){
-  .wrap{padding:14px 16px 32px}
-  .stage{grid-template-columns:1fr;gap:16px}
-  .cbody{min-height:210px}
-  .tabs{width:100%;justify-content:space-between}
-  .tabs button{flex:1;padding:8px 6px}
+  /* phone: prompt above the board, answers right under it, reference material below */
+  .wrap{padding:8px 12px 28px}
+  .top{padding-bottom:8px;border-bottom:0;gap:0}
+  .top .eyebrow,.top h1,#sound,#tab-rules{display:none}
+  .top>div:first-child{display:none}
+  .topr{width:100%;flex-wrap:nowrap;gap:6px}
+  .sides button{padding:6px 10px;font-size:12.5px}
+  .tabs{margin-left:auto;padding:3px;gap:0}
+  .tabs button{padding:6px 10px;font-size:12.5px}
+  .more{display:block;position:relative}
+  #more{border:0;background:none;font-size:20px;line-height:1;padding:4px 6px;color:var(--muted)}
+  .menu{position:absolute;right:0;top:110%;z-index:30;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:4px;display:flex;flex-direction:column;min-width:160px;box-shadow:0 10px 24px -12px rgba(0,0,0,.5)}
+  .menu button{border:0;background:none;text-align:left;padding:10px 12px;font-size:14.5px;font-weight:500;border-radius:7px}
+  .stage{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;margin-top:4px;align-items:center}
+  .boardcol,.coach,.cbody{display:contents}
+  .stage>*,.boardcol>*,.coach>*,.cbody>*{grid-column:1/-1;min-width:0}
+  .rnote{display:none}
+  .mlabel{display:flex;justify-content:space-between;gap:10px;order:10;margin:0;font-size:11.5px;line-height:1.3;color:var(--muted);min-height:15px}
+  #mlabel-l{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #mlabel-l.good{color:var(--accent)} #mlabel-l.bad,#mlabel-l.miss{color:var(--hot)} #mlabel-l.ok{color:var(--amber)}
+  #mlabel-r{flex:none}
+  .slot{order:12;margin:0;font-size:18px;line-height:1.25;min-height:45px;max-width:none}
+  .slot:empty{display:block}
+  .sub{order:13;margin:-2px 0 0;font-size:12.5px;line-height:1.35;min-height:17px;max-width:none}
+  .sub:empty{display:block}
+  .focus{order:14;padding:0;border:0;background:none;min-height:66px}
+  .stage.focus-on .slot,.stage.focus-on .sub{display:none}
+  .stage.focus-on .lastv{display:block;order:15;margin:0;font-size:12.5px;line-height:1.35;min-height:17px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lastv.good{color:var(--accent)} .lastv.ok{color:var(--amber)} .lastv.bad{color:var(--hot)}
+  .focus{min-height:44px}
+  .focus .eyebrow,.focus.quiz>strong{display:none}
+  .focus .acts.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .focus .acts.seg .chip{border:0;border-radius:0;background:var(--surface);color:var(--ink);font-family:var(--body);font-size:12.5px;font-weight:600;line-height:1.15;padding:8px 4px;min-height:38px;text-decoration:none;white-space:normal}
+  .focus .acts.seg .chip.no{color:var(--hot);opacity:.55;text-decoration:line-through}
+  .fname{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;box-sizing:border-box;background:var(--ink);color:var(--bg);border-radius:9px;padding:9px 12px;cursor:pointer}
+  .fname::after{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg) translateY(-2px);opacity:.7}
+  .focus.open .fname::after{transform:rotate(-135deg) translateY(-2px)}
+  .focus .fname strong{font-family:var(--body);font-style:normal;font-size:14px;font-weight:600;color:inherit;margin:0;display:inline}
+  .fdetail{display:none;padding:8px 2px 2px}
+  .focus.open .fdetail{display:block}
+  .focus .fdetail p{font-size:13.5px;margin:0 0 6px}
+  .board{order:20}
+  .cap{order:21}
+  .cap.on{margin-top:2px;font-size:17px}
+  .feed{order:22;margin-top:2px}
+  .chead{order:59;grid-column:1;border:0;padding:0}
+  .coach .chead h2{display:none}
+  .under{order:60;grid-column:2;margin:0;justify-content:flex-end;gap:2px}
+  .under .btn.sec{display:none}
+  .under .btn{border:0;background:none;padding:8px 8px;font-size:0;color:var(--muted)}
+  .under .btn::after{content:attr(data-short);font-size:13px;font-weight:600}
+  .under .btn.pri{background:none;color:var(--accent)}
+  .ribbon{order:70;margin-top:8px}
+  .legend{order:71;margin:0}
+  .strip{order:72;margin:0}
+  .rail{order:80;margin-top:10px}
+  .card strong{font-size:20px}
+  .opt{padding:9px 12px;font-size:14.5px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -244,6 +300,14 @@ h1 em{font-weight:500;color:var(--accent)}
       <button role="tab" data-mode="spar" id="tab-spar">Spar</button>
       <button role="tab" data-mode="rules" id="tab-rules">Rules</button>
     </nav>
+    <div class="more">
+      <button type="button" id="more" aria-label="More">&#8943;</button>
+      <div class="menu" id="menu" hidden>
+        <button type="button" id="m-restart">Restart lesson</button>
+        <button type="button" id="m-rules">Rules</button>
+        <button type="button" id="m-sound">Sound: on</button>
+      </div>
+    </div>
     </div>
   </header>
 
@@ -265,8 +329,10 @@ h1 em{font-weight:500;color:var(--accent)}
       <div class="cbody">
         <div class="ribbon" id="ribbon"></div>
         <p class="rnote" id="rnote"></p>
+        <p class="mlabel" id="mlabel"><span id="mlabel-l"></span><span id="mlabel-r"></span></p>
         <p class="slot" id="slot"></p>
         <p class="sub" id="sub"></p>
+        <p class="lastv" id="last"></p>
         <div class="feed" id="feed"></div>
       </div>
     </section>

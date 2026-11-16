@@ -17,7 +17,7 @@ const LESSONS = [
     intro: 'Play what feels right. Wrong moves are part of the lesson.',
     steps: [
       {
-        ask: 'Play White\'s first move.', hint: 'A centre pawn that frees your bishop and queen.',
+        ask: 'Play White\'s first move.', short: 'Your first move.', hint: 'A centre pawn that frees your bishop and queen.',
         good: { e4: 'Centre claimed. Bishop and queen can get out.' },
         why: { q: 'Why a centre pawn first?', opts: [
           { t: 'It frees my bishop and queen', right: true },
@@ -28,7 +28,7 @@ const LESSONS = [
         reply: 'e5'
       },
       {
-        ask: 'Develop a piece and attack something.', hint: 'A knight can come out and hit e5.',
+        ask: 'Develop a piece and attack something.', short: 'Develop with a threat.', hint: 'A knight can come out and hit e5.',
         good: { Nf3: 'Out with a threat. Black must defend e5.' },
         why: { q: 'Why the knight before the bishop?', opts: [
           { t: 'It makes a threat, so Black must react', right: true },
@@ -46,7 +46,7 @@ const LESSONS = [
         reply: 'Nc6', replyNote: 'Defends e5.'
       },
       {
-        pre: { q: 'Tap the weakest square in Black\'s camp.', sq: 'f7', yes: 'f7. Only the king guards it.', arrows: [['e8', 'f7', 'd']] },
+        pre: { q: 'Tap the weakest square in Black\'s camp.', qs: 'Tap Black\'s weakest square.', sq: 'f7', yes: 'f7. Only the king guards it.', arrows: [['e8', 'f7', 'd']] },
         ask: 'Aim your bishop at it.', hint: 'Find the diagonal that ends on f7.',
         good: { Bc4: 'The Italian Game. Bishop hits f7, castling is next.' }, arrows: [['c4', 'f7', 'r']], marks: ['f7'],
         ok: { Bb5: 'That is the Ruy Lopez. Aim at f7 instead.', Be2: 'Too shy. Aim at f7.', Nc3: 'Fine, but bishop first.', d4: 'Fine, but bishop first.' },
@@ -65,7 +65,7 @@ const LESSONS = [
     intro: 'Build your home setup, one move at a time.',
     steps: [
       {
-        ask: 'You want d4 next. Prepare it with a pawn.', see: [['d2', 'd4', 'p']], hint: 'The pawn next door supports d4.',
+        ask: 'You want d4 next. Prepare it with a pawn.', short: 'Prepare d4 with a pawn.', see: [['d2', 'd4', 'p']], hint: 'The pawn next door supports d4.',
         good: { c3: 'Now d4 comes with a pawn ready to recapture.' },
         why: { q: 'Why c3 before d4?', opts: [
           { t: 'So a pawn can recapture on d4', right: true },
@@ -84,7 +84,7 @@ const LESSONS = [
         reply: 'Nf6'
       },
       {
-        pre: { q: 'Black just attacked something. Tap it.', sq: 'e4', yes: 'Your e4 pawn.', arrows: [['f6', 'e4', 'r']] },
+        pre: { q: 'Black just attacked something. Tap it.', qs: 'What did Black attack?', sq: 'e4', yes: 'Your e4 pawn.', arrows: [['f6', 'e4', 'r']] },
         ask: 'Defend it with a pawn.', see: [['f6', 'e4', 'r']], hint: 'The d-pawn, one square.',
         good: { d3: 'Defended, and your c1 bishop is free.' }, arrows: [['d3', 'e4', 'd'], ['c1', 'g5', 'p']],
         ok: { d4: 'The sharp main line. Later.', Qe2: 'Let a pawn do a pawn\'s job.', Qc2: 'Let a pawn do a pawn\'s job.' },
@@ -111,7 +111,7 @@ const LESSONS = [
         bad: {}, reply: 'a6'
       },
       {
-        ask: 'Your b1 knight dreams of g3. Start the trip.', seeMarks: [['g3', 'p']], hint: 'First stop: d2.',
+        ask: 'Your b1 knight dreams of g3. Start the trip.', short: 'Knight to g3. First hop?', seeMarks: [['g3', 'p']], hint: 'First stop: d2.',
         good: { Nbd2: 'd2, f1, g3. The Italian knight tour.' },
         dream: [
           { play: 'Ba7', cap: 'Black waits.' },
@@ -130,7 +130,7 @@ const LESSONS = [
     intro: 'Black played 3...Nf6. You can attack at once.',
     steps: [
       {
-        pre: { q: 'Tap the square only Black\'s king defends.', sq: 'f7', yes: 'f7 again.', arrows: [['e8', 'f7', 'd'], ['c4', 'f7', 'r']] },
+        pre: { q: 'Tap the square only Black\'s king defends.', qs: 'Which square has one guard?', sq: 'f7', yes: 'f7 again.', arrows: [['e8', 'f7', 'd'], ['c4', 'f7', 'r']] },
         ask: 'Bring a second attacker.', see: [['c4', 'f7', 'r']], hint: 'Your knight can reach g5.',
         good: { Ng5: 'Two attackers, one defender.' },
         why: { q: 'Why does Ng5 work now, but not against 3...Bc5?', opts: [
@@ -145,13 +145,13 @@ const LESSONS = [
         reply: 'd5', replyNote: 'Best defence. It blocks your bishop.'
       },
       {
-        ask: 'Your bishop is attacked. Do better than retreat.', see: [['d5', 'c4', 'r']], hint: 'Take the attacker with a pawn.',
+        ask: 'Your bishop is attacked. Do better than retreat.', short: 'Bishop attacked. Don\'t retreat.', see: [['d5', 'c4', 'r']], hint: 'Take the attacker with a pawn.',
         good: { exd5: 'Attacker gone, pawn won, knight attacked.' }, arrows: [['d5', 'c6', 'r']],
         ok: { Bb3: 'Do not retreat. Take.', Bb5: 'Do not retreat. Take.', Bxd5: 'Take with the pawn. Keep your bishop.' },
         bad: {}, reply: 'Nxd5', replyNote: 'Natural, and a famous mistake.'
       },
       {
-        ask: 'Only the king guards f7. Be brave.', see: [['c4', 'f7', 'r'], ['g5', 'f7', 'r'], ['e8', 'f7', 'd']], hint: 'Sacrifice the knight on f7.',
+        ask: 'Only the king guards f7. Be brave.', short: 'f7 has one guard. Be brave.', see: [['c4', 'f7', 'r'], ['g5', 'f7', 'r'], ['e8', 'f7', 'd']], hint: 'Sacrifice the knight on f7.',
         good: { Nxf7: 'The Fried Liver. It forks queen and rook, so Black must take.' },
         why: { q: 'Why give up a whole knight?', opts: [
           { t: 'To drag the king into the open', right: true },
@@ -162,7 +162,7 @@ const LESSONS = [
       },
       {
         pre: { q: 'Tap Black\'s loose piece.', sq: 'd5', yes: 'Guarded only by the queen.', arrows: [['d8', 'd5', 'd'], ['c4', 'd5', 'r']] },
-        ask: 'Find a check that also hits it.', see: [['c4', 'd5', 'r']], hint: 'Queen to f3.',
+        ask: 'Find a check that also hits it.', short: 'A check that also hits it?', see: [['c4', 'd5', 'r']], hint: 'Queen to f3.',
         good: { 'Qf3+': 'Fork: check, plus a second attacker on the knight.' },
         dream: [
           { play: 'Kg8', cap: 'What if the king hides instead?' },
@@ -174,15 +174,15 @@ const LESSONS = [
         reply: 'Ke6', replyNote: 'The king has to guard the knight himself.'
       },
       {
-        pre: { q: 'Tap both defenders of the d5 knight.', sqs: ['e6', 'd8'], target: 'd5', col: 'd', yes: 'Two defenders. You have two attackers.' },
-        ask: 'Two against two. Add a third attacker.', see: [['f3', 'd5', 'r'], ['c4', 'd5', 'r'], ['e6', 'd5', 'd'], ['d8', 'd5', 'd']], hint: 'Develop your last knight.',
+        pre: { q: 'Tap both defenders of the d5 knight.', qs: 'Tap d5\'s two defenders.', sqs: ['e6', 'd8'], target: 'd5', col: 'd', yes: 'Two defenders. You have two attackers.' },
+        ask: 'Two against two. Add a third attacker.', short: 'Add a third attacker.', see: [['f3', 'd5', 'r'], ['c4', 'd5', 'r'], ['e6', 'd5', 'd'], ['d8', 'd5', 'd']], hint: 'Develop your last knight.',
         good: { Nc3: 'Three against two, and that knight is pinned.' }, arrows: [['c3', 'd5', 'r'], ['f3', 'd5', 'r'], ['c4', 'd5', 'r']],
         ok: { 'O-O': 'Too slow. Add an attacker to d5.', d4: 'Next move. First add an attacker to d5.' },
         bad: { 'Bxd5+': { name: 'Trading away the attack', line: ['Qxd5', 'Qxd5+', 'Kxd5'], notes: ['Queen takes.', 'Queens off.', 'No attackers left, and you are a knight down.'], draws: [null, null, null] } },
         reply: 'Ne7'
       },
       {
-        ask: 'Blow the centre open onto the king.', hint: 'Push the d-pawn two squares.',
+        ask: 'Blow the centre open onto the king.', short: 'Blow the centre open.', hint: 'Push the d-pawn two squares.',
         good: { d4: 'Lines open. The king cannot run. Castle next.' },
         why: { q: 'Why blow the centre open?', opts: [
           { t: 'Black\'s king is stuck there and my pieces need lines', right: true },
@@ -226,7 +226,7 @@ const LESSONS = [
         reply: 'h6'
       },
       {
-        ask: 'The knight is kicked. Bring it home.', see: [['h6', 'g5', 'r']], hint: 'Back to f3.',
+        ask: 'The knight is kicked. Bring it home.', short: 'Knight kicked. Bring it home.', see: [['h6', 'g5', 'r']], hint: 'Back to f3.',
         good: { Nf3: 'A clean pawn up. Castle and develop.' },
         ok: { Nh3: 'Playable, but f3 is its home.' },
         bad: {
@@ -243,7 +243,7 @@ const LESSONS = [
     intro: 'Some opponents panic and kick the knight.',
     steps: [
       {
-        pre: { q: 'Count first. Tap both attackers of f7.', sqs: ['c4', 'g5'], target: 'f7', col: 'r', yes: 'Two attackers. One defender.' },
+        pre: { q: 'Count first. Tap both attackers of f7.', qs: 'Tap f7\'s two attackers.', sqs: ['c4', 'g5'], target: 'f7', col: 'r', yes: 'Two attackers. One defender.' },
         ask: 'Two against one. Take it.', see: [['c4', 'f7', 'r'], ['g5', 'f7', 'r'], ['e8', 'f7', 'd']], hint: 'Knight takes f7.',
         good: { Nxf7: 'Fork. Black loses a rook.' }, arrows: [['f7', 'd8', 'r'], ['f7', 'h8', 'r'], ['c4', 'f7', 'd']],
         ok: { 'Bxf7+': 'Good, but the knight wins a whole rook.' },
@@ -260,7 +260,7 @@ const LESSONS = [
     intro: 'Black ignores your threat and aims at f2.',
     steps: [
       {
-        ask: 'Take on f7. One way is safe, one is chaos.', see: [['c5', 'f2', 'r']], hint: 'Capture with check.',
+        ask: 'Take on f7. One way is safe, one is chaos.', short: 'Take f7. With which piece?', see: [['c5', 'f2', 'r']], hint: 'Capture with check.',
         good: { 'Bxf7+': 'With check. Black\'s king can never castle now.' },
         why: { q: 'Why the bishop and not the knight?', opts: [
           { t: 'It is check, so Black gets no time to hit f2', right: true },
@@ -277,7 +277,7 @@ const LESSONS = [
         reply: 'Ke7'
       },
       {
-        ask: 'The king attacks your bishop. Step back.', see: [['e7', 'f7', 'r']], hint: 'Back along the diagonal.',
+        ask: 'The king attacks your bishop. Step back.', short: 'Bishop attacked. Step back.', see: [['e7', 'f7', 'r']], hint: 'Back along the diagonal.',
         good: { Bb3: 'Safe, a pawn up, and Black cannot castle.', Bd5: 'Safe, a pawn up, and Black cannot castle.', Bc4: 'Safe, a pawn up, and Black cannot castle.' },
         ok: {}, bad: {}
       }
@@ -290,7 +290,7 @@ const LESSONS = [
     intro: 'Black leaves e5 undefended. It looks like a gift.',
     steps: [
       {
-        ask: 'Free pawn on e5. Take it? Try it and see.', seeMarks: ['e5'], hint: 'Take the knight, not the pawn.',
+        ask: 'Free pawn on e5. Take it? Try it and see.', short: 'Free pawn on e5. Take it?', seeMarks: ['e5'], hint: 'Take the knight, not the pawn.',
         good: { Nxd4: 'Bait declined. Annoying knight removed.' },
         why: { q: 'What was the d4 knight for?', opts: [
           { t: 'Bait: it sets up ...Qg5 and a mate on f3', right: true },
@@ -307,7 +307,7 @@ const LESSONS = [
         reply: 'exd4'
       },
       {
-        ask: 'Trap dodged. Make a useful move.', hint: 'Castle, or hit d4 with the c-pawn.',
+        ask: 'Trap dodged. Make a useful move.', short: 'Now a useful move.', hint: 'Castle, or hit d4 with the c-pawn.',
         good: { 'O-O': 'King safe. Next, hit d4 with c3.', c3: 'Hits the pawn and opens the centre.' },
         ok: { d3: 'Solid. Castling does more.' }, bad: {}
       }
@@ -320,7 +320,7 @@ const LESSONS = [
     intro: 'What you do to f7, Black can do to f2.',
     steps: [
       {
-        pre: { q: 'Tap the square Black is aiming at.', sq: 'f2', yes: 'Two attackers. Only your king defends.', arrows: [['c5', 'f2', 'r'], ['g4', 'f2', 'r'], ['e1', 'f2', 'd']] },
+        pre: { q: 'Tap the square Black is aiming at.', qs: 'Where is Black aiming?', sq: 'f2', yes: 'Two attackers. Only your king defends.', arrows: [['c5', 'f2', 'r'], ['g4', 'f2', 'r'], ['e1', 'f2', 'd']] },
         ask: 'One move fixes it.', see: [['c5', 'f2', 'r'], ['g4', 'f2', 'r']], hint: 'Castle.',
         good: { 'O-O': 'Rook and king both guard f2 now.' },
         dream: [
@@ -342,7 +342,7 @@ const LESSONS = [
     intro: 'Weak opponents move pieces without asking what they were guarding.',
     steps: [
       {
-        pre: { q: 'The knight left c6. Tap what it was guarding.', sq: 'e5', yes: 'e5 has no defender now.', arrows: [['f3', 'e5', 'r']] },
+        pre: { q: 'The knight left c6. Tap what it was guarding.', qs: 'What was that knight guarding?', sq: 'e5', yes: 'e5 has no defender now.', arrows: [['f3', 'e5', 'r']] },
         ask: 'Take the free pawn.', see: [['f3', 'e5', 'r'], ['a5', 'c4', 'r']], hint: 'Knight takes e5.',
         good: { Nxe5: 'Free pawn. If Black takes your bishop, the knight takes back.' }, arrows: [['e5', 'c4', 'd'], ['a5', 'c4', 'r']],
         ok: { 'Bxf7+': 'No need to gamble. Take the free pawn.', Be2: MISSED, Bb3: MISSED, Bb5: MISSED, Bd3: MISSED },
@@ -358,8 +358,8 @@ const LESSONS = [
     intro: 'Black pins your knight to your queen.',
     steps: [
       {
-        pre: { q: 'Tap what Black wins if your f3 knight moves.', sq: 'd1', yes: 'The pin: bishop, knight, queen in a line.', arrows: [['h5', 'd1', 'r']] },
-        ask: 'Move the knight anyway. Dare Black to take the queen.', see: [['h5', 'd1', 'r']], hint: 'Knight takes e5.',
+        pre: { q: 'Tap what Black wins if your f3 knight moves.', qs: 'What is your knight pinned to?', sq: 'd1', yes: 'The pin: bishop, knight, queen in a line.', arrows: [['h5', 'd1', 'r']] },
+        ask: 'Move the knight anyway. Dare Black to take the queen.', short: 'Move the knight anyway.', see: [['h5', 'd1', 'r']], hint: 'Knight takes e5.',
         good: { Nxe5: 'A queen sacrifice. Taking it walks into mate.' },
         why: { q: 'Why can you leave the queen hanging?', opts: [
           { t: 'If Black takes it, I have a forced mate', right: true },
@@ -379,7 +379,7 @@ const LESSONS = [
     intro: 'Same trick, but Black takes the knight instead.',
     steps: [
       { ask: 'The pin is gone. Collect.', see: [['d1', 'h5', 'r']], hint: 'The h5 bishop has no defender.', good: { Qxh5: 'Piece back, pawn up.' }, ok: {}, bad: {}, reply: 'Nxc4', replyNote: 'Black grabs your bishop.' },
-      { ask: 'Find a check that also hits the c4 knight.', seeMarks: ['c4'], hint: 'Slide the queen along the fifth rank.', good: { 'Qb5+': 'Fork: king and knight.' },
+      { ask: 'Find a check that also hits the c4 knight.', short: 'A check that also hits c4?', seeMarks: ['c4'], hint: 'Slide the queen along the fifth rank.', good: { 'Qb5+': 'Fork: king and knight.' },
         why: { q: 'Why does this win the knight?', opts: [
           { t: 'Black must deal with the check first', right: true },
           { t: 'The knight is pinned', note: 'It is not pinned. It just runs out of time.' },
@@ -395,15 +395,15 @@ const LESSONS = [
     intro: 'Same ideas, other side of the board.',
     steps: [
       {
-        ask: 'White took the centre. Take your share.', hint: 'Mirror the king\'s pawn.',
+        ask: 'White took the centre. Take your share.', short: 'Take your share of the centre.', hint: 'Mirror the king\'s pawn.',
         good: { e5: 'An equal share of the centre. Bishop and queen can get out.' }, arrows: [['f8', 'c5', 'p'], ['d8', 'h4', 'p']],
         ok: { c5: 'Good move, different opening (the Sicilian). Use the king\'s pawn.', e6: 'Good move, different opening (the French). Use the king\'s pawn.', d5: 'Playable, but your queen gets dragged out early. Use the king\'s pawn.', Nf6: 'A real defence, but a different book. Use the king\'s pawn.' },
         bad: { f6: { name: 'The f6 habit', text: 'Steals your knight\'s square and opens your king.' }, a5: EDGE, h5: EDGE },
         reply: 'Nf3', replyNote: 'A knight comes out with a threat.'
       },
       {
-        pre: { q: 'Tap what White is attacking.', sq: 'e5', yes: 'Your e5 pawn.', arrows: [['f3', 'e5', 'r']] },
-        ask: 'Defend it with a developing move.', see: [['f3', 'e5', 'r']], hint: 'A knight can guard e5.',
+        pre: { q: 'Tap what White is attacking.', qs: 'What is White attacking?', sq: 'e5', yes: 'Your e5 pawn.', arrows: [['f3', 'e5', 'r']] },
+        ask: 'Defend it with a developing move.', short: 'Defend it and develop.', see: [['f3', 'e5', 'r']], hint: 'A knight can guard e5.',
         good: { Nc6: 'Defended, and a piece is out.' }, arrows: [['c6', 'e5', 'd']],
         why: { q: 'Why a knight and not the f-pawn?', opts: [
           { t: 'It develops a piece and keeps my king closed', right: true },
@@ -421,8 +421,8 @@ const LESSONS = [
         reply: 'Bc4', replyNote: 'The Italian. You know this bishop.'
       },
       {
-        pre: { q: 'Tap the square White\'s bishop aims at.', sq: 'f7', yes: 'Your weak spot. Only the king guards it.', arrows: [['c4', 'f7', 'r'], ['e8', 'f7', 'd']] },
-        ask: 'Put your bishop on its best diagonal.', see: [['c4', 'f7', 'r']], hint: 'Mirror White\'s bishop.',
+        pre: { q: 'Tap the square White\'s bishop aims at.', qs: 'Where does that bishop aim?', sq: 'f7', yes: 'Your weak spot. Only the king guards it.', arrows: [['c4', 'f7', 'r'], ['e8', 'f7', 'd']] },
+        ask: 'Put your bishop on its best diagonal.', short: 'Bishop to its best diagonal.', see: [['c4', 'f7', 'r']], hint: 'Mirror White\'s bishop.',
         good: { Bc5: 'Mirror image. Your bishop aims at f2.' }, arrows: [['c5', 'f2', 'r']], marks: ['f2'],
         ok: { Nf6: 'A real defence (the Two Knights), but it invites Ng5. That is stage two. Bishop first.', Be7: 'Solid but shy. Aim at f2.', d6: 'Fine, but get the bishop out before the pawn shuts it in.', h6: 'A wasted move. Develop a piece.' },
         bad: { Na5: { name: 'The defender that wandered off', line: ['Nxe5'], notes: ['That knight was guarding e5.'], draws: [null] } }
@@ -436,28 +436,28 @@ const LESSONS = [
     intro: 'White prepares d4. Build the home base you already know.',
     steps: [
       {
-        ask: 'Develop a piece and attack something.', hint: 'Your g8 knight can hit e4.',
+        ask: 'Develop a piece and attack something.', short: 'Develop with a threat.', hint: 'Your g8 knight can hit e4.',
         good: { Nf6: 'Out with a threat. White must look after e4.' }, arrows: [['f6', 'e4', 'r']],
         ok: { d6: 'Fine, but the knight makes a threat first.', Qe7: 'Playable, but develop a knight first.', Nge7: 'It develops, but from e7 the knight attacks nothing.' },
         bad: {}, reply: 'd3'
       },
       {
-        ask: 'Support e5 and free your last bishop.', hint: 'The d-pawn, one square.',
+        ask: 'Support e5 and free your last bishop.', short: 'Support e5, free the bishop.', hint: 'The d-pawn, one square.',
         good: { d6: 'e5 is solid and your c8 bishop can get out.' }, arrows: [['d6', 'e5', 'd'], ['c8', 'g4', 'p']],
         ok: { 'O-O': 'Good, and it comes next. Pawn first here.', a6: 'Useful soon. Centre first.', h6: 'Useful later. Centre first.' },
         bad: { Ng4: { name: 'The premature raid', line: ['O-O'], notes: ['White castles. f2 has two guards and your knight has wasted a move.'], draws: [[['f1', 'f2', 'd'], ['g1', 'f2', 'd']]] } },
         reply: 'O-O'
       },
       {
-        ask: 'Your king needs a home too.', hint: 'Castle.',
+        ask: 'Your king needs a home too.', short: 'Your king needs a home.', hint: 'Castle.',
         good: { 'O-O': 'Safe. Same rule as White: castled by move 8.' },
         ok: { Bg4: LATER, a6: LATER, h6: LATER, Be6: LATER },
         bad: { Ng4: { name: 'Attacking a defended square', line: ['h3'], notes: ['f2 is guarded twice. The pawn just kicks you back.'], draws: [[['h3', 'g4', 'r']]] } },
         reply: 'Re1'
       },
       {
-        pre: { q: 'White wants to chase your c5 bishop with a pawn. Tap that pawn.', sq: 'b2', yes: 'b4 is coming, then a4 and a5.', arrows: [['b2', 'b4', 'r'], ['b4', 'c5', 'r']] },
-        ask: 'Give the bishop an escape square.', see: [['b2', 'b4', 'r']], hint: 'The a-pawn, one square.',
+        pre: { q: 'White wants to chase your c5 bishop with a pawn. Tap that pawn.', qs: 'Which pawn will chase your bishop?', sq: 'b2', yes: 'b4 is coming, then a4 and a5.', arrows: [['b2', 'b4', 'r'], ['b4', 'c5', 'r']] },
+        ask: 'Give the bishop an escape square.', short: 'Give the bishop an escape.', see: [['b2', 'b4', 'r']], hint: 'The a-pawn, one square.',
         good: { a6: 'Now the bishop can drop back to a7 and keep its diagonal.' }, arrows: [['c5', 'a7', 'p']],
         ok: { a5: 'Also good: it stops b4 altogether.', Bb6: 'Fine too. The pawn move keeps more options.', h6: 'Useful, but look after your bishop first.', Be6: 'Good move, but look after your c5 bishop first.' },
         bad: {}, reply: 'Nbd2'
@@ -480,7 +480,7 @@ const LESSONS = [
     intro: 'You know this one from the other side: Ng5 at the wrong time.',
     steps: [
       {
-        pre: { q: 'Tap your piece that can see g5.', sq: 'd8', yes: 'The queen has a clear diagonal.', arrows: [['d8', 'g5', 'r']] },
+        pre: { q: 'Tap your piece that can see g5.', qs: 'Which piece sees g5?', sq: 'd8', yes: 'The queen has a clear diagonal.', arrows: [['d8', 'g5', 'r']] },
         ask: 'Punish it.', see: [['d8', 'g5', 'r']], hint: 'Take the knight.',
         good: { Qxg5: 'A free knight.' },
         ok: { Nh6: 'It guards f7, but the knight was free.', Qe7: 'It guards f7, but the knight was free.', Qf6: 'It guards f7, but the knight was free.' },
@@ -488,13 +488,13 @@ const LESSONS = [
         reply: 'd4', replyNote: 'A trick: the pawn hits your bishop and uncovers an attack on your queen.'
       },
       {
-        ask: 'Queen and bishop are both attacked. Save the queen by taking something.', see: [['c1', 'g5', 'r'], ['d4', 'c5', 'r']], hint: 'The g2 pawn.',
+        ask: 'Queen and bishop are both attacked. Save the queen by taking something.', short: 'Two pieces attacked. Queen takes what?', see: [['c1', 'g5', 'r'], ['d4', 'c5', 'r']], hint: 'The g2 pawn.',
         good: { Qxg2: 'Queen safe, pawn won, and now White\'s rook is attacked.' }, arrows: [['g2', 'h1', 'r']],
         ok: { Qg6: 'Safe, but White takes your bishop. Take something first.', Qf6: 'Safe, but White takes your bishop. Take something first.', Qh4: 'Safe, but White takes your bishop. Take something first.' },
         bad: {}, reply: 'Rf1'
       },
       {
-        ask: 'Now deal with the attack on your bishop, with profit.', see: [['d4', 'c5', 'r']], hint: 'Take the d4 pawn.',
+        ask: 'Now deal with the attack on your bishop, with profit.', short: 'Save the bishop, with profit.', see: [['d4', 'c5', 'r']], hint: 'Take the d4 pawn.',
         good: { Bxd4: 'A knight and two pawns up.', Nxd4: 'A knight and two pawns up.', 'Qxe4+': 'Check first, then the d4 pawn. Also winning.' },
         ok: { Bb6: 'Safe, and still a knight up. You could have taken a pawn too.' }, bad: {}
       }
@@ -507,7 +507,7 @@ const LESSONS = [
     intro: 'White brought the c3 knight out before you played ...Bc5. That allows a trick.',
     steps: [
       {
-        ask: 'Take a pawn that looks defended.', seeMarks: ['e4'], hint: 'Knight takes e4.',
+        ask: 'Take a pawn that looks defended.', short: 'Take the pawn anyway.', seeMarks: ['e4'], hint: 'Knight takes e4.',
         good: { Nxe4: 'It looks like a blunder. It is not.' },
         why: { q: 'Why is this safe?', opts: [
           { t: 'After White retakes, ...d5 forks bishop and knight', right: true },
@@ -534,8 +534,8 @@ const LESSONS = [
     intro: 'The most common trick below 800. Stay calm and it gives you a better game.',
     steps: [
       {
-        pre: { q: 'Tap what the queen attacks right now.', sq: 'e5', yes: 'e5 first. f7 only matters once a bishop joins.', arrows: [['h5', 'e5', 'r'], ['h5', 'f7', 'r']] },
-        ask: 'Defend e5 with a developing move.', see: [['h5', 'e5', 'r']], hint: 'The b8 knight.',
+        pre: { q: 'Tap what the queen attacks right now.', qs: 'What does the queen attack?', sq: 'e5', yes: 'e5 first. f7 only matters once a bishop joins.', arrows: [['h5', 'e5', 'r'], ['h5', 'f7', 'r']] },
+        ask: 'Defend e5 with a developing move.', short: 'Defend e5 and develop.', see: [['h5', 'e5', 'r']], hint: 'The b8 knight.',
         good: { Nc6: 'Pawn defended, piece out.' }, arrows: [['c6', 'e5', 'd']],
         ok: { d6: 'It defends, but a knight does it and develops.', Qe7: 'Playable, but develop a knight instead.', Qf6: 'Playable, but develop a knight instead.' },
         bad: {
@@ -546,15 +546,15 @@ const LESSONS = [
         reply: 'Bc4', replyNote: 'Now a bishop joins.'
       },
       {
-        pre: { q: 'Tap the square where White threatens mate.', sq: 'f7', yes: 'Queen and bishop both hit it.', arrows: [['h5', 'f7', 'r'], ['c4', 'f7', 'r']] },
-        ask: 'Block the queen and attack it at the same time.', see: [['h5', 'f7', 'r'], ['c4', 'f7', 'r']], hint: 'The g-pawn.',
+        pre: { q: 'Tap the square where White threatens mate.', qs: 'Where is mate threatened?', sq: 'f7', yes: 'Queen and bishop both hit it.', arrows: [['h5', 'f7', 'r'], ['c4', 'f7', 'r']] },
+        ask: 'Block the queen and attack it at the same time.', short: 'Block the queen and hit it.', see: [['h5', 'f7', 'r'], ['c4', 'f7', 'r']], hint: 'The g-pawn.',
         good: { g6: 'Mate stopped, and the queen has to move again.' }, arrows: [['g6', 'h5', 'r']],
         ok: { Qe7: 'It stops mate. A pawn move does it and gains time.', Qf6: 'It stops mate. A pawn move does it and gains time.', Nh6: 'It holds f7, but the knight is badly placed there.' },
         bad: { Nf6: { name: 'Scholar\'s mate', line: ['Qxf7#'], notes: ['Checkmate in four. Everyone loses to this once.'], draws: [null] } },
         reply: 'Qf3', replyNote: 'Mate on f7 is threatened again.'
       },
       {
-        ask: 'Block again, with a developing move.', see: [['f3', 'f7', 'r'], ['c4', 'f7', 'r']], hint: 'The g8 knight.',
+        ask: 'Block again, with a developing move.', short: 'Block again and develop.', see: [['f3', 'f7', 'r'], ['c4', 'f7', 'r']], hint: 'The g8 knight.',
         good: { Nf6: 'Blocked. You have two knights out. White has a queen that moved three times.' }, arrows: [['f6', 'f3', 'd']],
         dream: [
           { play: 'Ne2', cap: 'White finally develops.' },
@@ -588,7 +588,7 @@ const LESSONS = [
         bad: {}, reply: 'Ba4'
       },
       {
-        ask: 'Develop and attack something.', hint: 'The g8 knight hits e4.',
+        ask: 'Develop and attack something.', short: 'Develop with a threat.', hint: 'The g8 knight hits e4.',
         good: { Nf6: 'e4 is attacked. Same idea as always.' }, arrows: [['f6', 'e4', 'r']],
         ok: { b5: 'Fine, and it comes later. Develop first.', Bc5: 'Playable. Knight first here.', d6: 'Solid. The knight is more active.' },
         bad: {}, reply: 'O-O', replyNote: 'White offers the e4 pawn. Leave it for now.'
@@ -600,8 +600,8 @@ const LESSONS = [
         bad: {}, reply: 'Re1', replyNote: 'Now e4 is guarded, so the threat to e5 is real.'
       },
       {
-        pre: { q: 'Tap the piece White wants to remove.', sq: 'c6', yes: 'Take the knight, then take e5.', arrows: [['a4', 'c6', 'r'], ['f3', 'e5', 'r']] },
-        ask: 'Chase the bishop off that diagonal.', see: [['a4', 'c6', 'r']], hint: 'The b-pawn, two squares.',
+        pre: { q: 'Tap the piece White wants to remove.', qs: 'Which piece does White want?', sq: 'c6', yes: 'Take the knight, then take e5.', arrows: [['a4', 'c6', 'r'], ['f3', 'e5', 'r']] },
+        ask: 'Chase the bishop off that diagonal.', short: 'Chase the bishop away.', see: [['a4', 'c6', 'r']], hint: 'The b-pawn, two squares.',
         good: { b5: 'The bishop can no longer take your knight. e5 is safe.' }, arrows: [['b5', 'a4', 'r'], ['c6', 'e5', 'd']],
         ok: { d6: 'It defends e5 and is playable. Kicking the bishop solves it for good.' },
         bad: { 'O-O': { name: 'Castling past a threat', line: ['Bxc6', 'dxc6', 'Nxe5'], notes: ['The defender goes.', 'You take back.', 'And e5 falls. With e4 guarded, ...Qd4 no longer wins it back.'], draws: [null, null, [['e1', 'e4', 'd']]] } },
@@ -620,7 +620,7 @@ const LESSONS = [
     intro: 'White opens the centre at once.',
     steps: [
       {
-        ask: 'A pawn attacks your pawn. What now?', see: [['d4', 'e5', 'r']], hint: 'Take it with the pawn.',
+        ask: 'A pawn attacks your pawn. What now?', short: 'Your pawn is attacked.', see: [['d4', 'e5', 'r']], hint: 'Take it with the pawn.',
         good: { exd4: 'Take. Otherwise White takes you and your knight gets pushed around.' },
         ok: { d6: 'Passive. White can trade queens and stop you castling.', Nxd4: 'Playable, but after the trade White\'s queen sits in the centre and nothing can chase it. Take with the pawn.' },
         bad: {}, reply: 'Nxd4'
