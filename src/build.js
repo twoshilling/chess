@@ -1,0 +1,10 @@
+const fs = require('fs');
+const t = fs.readFileSync('template.html', 'utf8');
+const lessons = fs.readFileSync('lessons.js', 'utf8').replace(/\nif \(typeof module[^\n]*\n?/, '\n');
+const app = fs.readFileSync('app.js', 'utf8');
+const out = '..';
+fs.writeFileSync(out + '/index.html', t.replace('/*LESSONS*/', () => lessons).replace('/*APP*/', () => app));
+fs.copyFileSync('node_modules/chess.js/chess.js', out + '/chess.js');
+fs.copyFileSync('node_modules/stockfish.js/stockfish.js', out + '/stockfish.js');
+fs.copyFileSync('node_modules/stockfish.js/Copying.txt', out + '/stockfish-licence.txt');
+console.log('built', fs.statSync(out + '/index.html').size);

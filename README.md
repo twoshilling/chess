@@ -1,1 +1,35 @@
-# chess
+# Italian Game Trainer
+
+An interactive chess trainer for the Italian Game (1.e4 e5 2.Nf3 Nc6 3.Bc4), aimed at getting from about 400 to 800 Elo.
+
+- **Learn**: short lessons for White and Black. Wrong moves are punished on the board so you see why.
+- **Drill**: random positions from the lessons, one try each.
+- **Spar**: play the opening out against a sloppy opponent, with a Guide that names the principle for each move.
+- **Rules**: checklists and the repertoire on one card.
+
+## Use it
+
+Open `index.html` through a web server. It will not fully work opened as a local file, because the engine runs in a web worker.
+
+To host it free on GitHub Pages: repository **Settings → Pages → Deploy from a branch → main, / (root)**. The trainer then lives at `https://twoshilling.github.io/chess/`.
+
+Progress is saved in the browser you use.
+
+## Files
+
+| File | What it is |
+|---|---|
+| `index.html` | The whole trainer (built file) |
+| `chess.js` | Chess rules library (chess.js 0.10.3, BSD licence) |
+| `stockfish.js` | Stockfish 10 engine, used for "Show the move" and the blunder check |
+| `stockfish-licence.txt` | Stockfish's GPL-3.0 licence |
+| `src/` | Sources: lessons, app code, page template, build and validation scripts |
+
+## Rebuild
+
+```
+cd src
+npm install
+npm run check   # validates every lesson line against the chess rules
+npm run build   # writes index.html and the libraries to the repository root
+```
