@@ -15,6 +15,8 @@ To host it free on GitHub Pages: repository **Settings → Pages → Deploy from
 
 Progress is saved in the browser you use.
 
+After the first visit it works offline: `sw.js` keeps a copy of the page and the engine on the device. On an iPhone, Share → Add to Home Screen opens it full screen like an app.
+
 ## Files
 
 | File | What it is |
@@ -24,6 +26,7 @@ Progress is saved in the browser you use.
 | `stockfish-19-lite-single.js`, `.wasm` | Stockfish 19 lite engine (WebAssembly), used for "Show the move", the Tactic priority and the mistake checks |
 | `stockfish.js` | Stockfish 10, the fallback if the newer engine cannot start |
 | `stockfish-19-licence.txt`, `stockfish-licence.txt` | Stockfish's GPL-3.0 licence |
+| `sw.js`, `manifest.webmanifest`, `icon-*.png` | Offline support and the home-screen icon (built from `src/static/`) |
 | `src/` | Sources: lessons, app code, page template, build and validation scripts; `src/vendor/` holds the Stockfish 19 files |
 
 ## Rebuild

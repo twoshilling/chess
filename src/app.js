@@ -823,44 +823,68 @@
     var t = [];
     attacksFrom(m.to, g).forEach(function (sq) {
       var q = g.get(sq); if (!q || q.color === m.color || q.type === 'p') return;
-      if (q.type === 'k' || VAL[q.type] > VAL[m.piece] || !guarded(g, sq, q.color)) t.push(q.type);
+      if (q.type === 'k' || VAL[q.type] > VAL[m.piece] || !guarded(g, sq, q.color)) t.push({ type: q.type, sq: sq });
     });
     return t.length >= 2 ? t : null;
   }
   /* Walks an engine line and names the first thing that happens in it. */
   function pvStory(pv, plies, g0) {
-    var g = new Chess((g0 || game).fen()), mover = g.turn(), out = { line: [], kind: null }, start = 0;
+    var g = new Chess((g0 || game).fen()), mover = g.turn(), out = { line: [], moves: [], kind: null }, start = 0;
     g.board().forEach(function (r) { r.forEach(function (p) { if (p) start += (p.color === mover ? 1 : -1) * VAL[p.type]; }); });
     for (var i = 0; i < Math.min(plies, (pv || []).length); i++) {
       var x = uciMove(g, pv[i]); if (!x) break;
-      out.line.push(x.san);
-      if (x.san.indexOf('#') >= 0) { out.kind = 'mate'; out.i = i; out.san = x.san; out.desc = 'is checkmate'; break; }
+      out.line.push(x.san); out.moves.push(x);
+      if (x.san.indexOf('#') >= 0) { out.kind = 'mate'; out.i = i; out.san = x.san; out.mv = x; break; }
       if (x.color !== mover) continue;
       var tr = trappedIn(g);
-      if (tr) { out.kind = 'trap'; out.i = i; out.san = x.san; out.sq = tr.sq; out.desc = 'traps ' + whose(tr.color) + ' ' + NAME[tr.type] + ' on ' + tr.sq; break; }
+      if (tr) { out.kind = 'trap'; out.i = i; out.san = x.san; out.mv = x; out.sq = tr.sq; out.victim = tr; break; }
       var fk = forkBy(g, x);
-      if (fk) { out.kind = 'fork'; out.i = i; out.san = x.san; out.sq = x.to; var names = fk.map(function (k) { return NAME[k]; }); out.desc = 'forks ' + (x.color === side ? ON() + '\'s ' : 'your ') + names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]; break; }
+      if (fk) { out.kind = 'fork'; out.i = i; out.san = x.san; out.mv = x; out.sq = x.to; out.targets = fk; break; }
     }
     if (!out.kind) {
       var end = 0; g.board().forEach(function (r) { r.forEach(function (p) { if (p) end += (p.color === mover ? 1 : -1) * VAL[p.type]; }); });
-      if (end - start >= 2 && out.line.length % 2 === 0) { out.kind = 'win'; out.i = out.line.length - 1; out.san = out.line[out.i]; out.desc = 'wins material'; }
+      if (end - start >= 2 && out.line.length % 2 === 0) { out.kind = 'win'; out.i = out.line.length - 1; out.san = out.line[out.i]; }
     }
     return out;
   }
-  /* One sentence for a story: "After Bxe6 fxe6, b4 traps Black's bishop on c5." */
-  function storyText(st) {
-    if (!st.kind) return '';
-    if (st.kind === 'win') return 'The line ' + st.line.slice(0, 4).join(' ') + (st.line.length > 4 ? ' ...' : '') + ' wins material.';
-    return (st.i > 0 ? 'After ' + st.line.slice(0, st.i).join(' ') + ', ' : '') + st.san + ' ' + st.desc + '.';
+  function owner(color) { return color === side ? 'your' : (color === 'w' ? 'White' : 'Black') + '\'s'; }
+  function cap1(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+  function listNames2(a) { return a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0]; }
+  /* "Black's knight takes the pawn on e4", "you castle" */
+  function moveWords(m) {
+    if (m.san.indexOf('O-O') === 0) return m.color === side ? 'you castle' : ON() + ' castles';
+    return owner(m.color) + ' ' + NAME[m.piece] + (m.captured ? ' takes the ' + NAME[m.captured] + ' on ' : ' goes to ') + m.to + (m.san.indexOf('+') >= 0 ? ' with check' : '');
   }
+  /* The event in words: "Black's pawn goes to d5 and attacks your rook and bishop at once" */
+  function eventWords(st) {
+    var w = moveWords(st.mv);
+    if (st.kind === 'fork') return w + ' and attacks ' + owner(st.targets[0] && game ? (st.mv.color === 'w' ? 'b' : 'w') : side) + ' ' + listNames2(st.targets.map(function (t) { return NAME[t.type]; })) + ' at once';
+    if (st.kind === 'trap') return w + ' and traps ' + owner(st.victim.color) + ' ' + NAME[st.victim.type] + ' on ' + st.victim.sq;
+    if (st.kind === 'mate') return w + ': checkmate';
+    return w;
+  }
+  /* One sentence, at most two moves in notation: "After Nxe4 Rxe4, Black's pawn goes to d5 and attacks ..." */
+  function storyText(st, skip) {
+    if (!st.kind) return '';
+    if (st.kind === 'win') return 'The line ' + st.line.slice(0, 4).join(' ') + ' wins material.';
+    var pre = st.line.slice(skip || 0, st.i);
+    return pre.length ? 'After ' + pre.join(' ') + ', ' + eventWords(st) + '.' : cap1(eventWords(st)) + '.';
+  }
+  /* What Peek draws at the key moment: the forking piece's attacks, or the trapped piece */
+  function storyKey(st) {
+    if (st.kind === 'fork') return { arrows: st.targets.map(function (t) { return [st.mv.to, t.sq, 'r']; }), marks: st.targets.map(function (t) { return t.sq; }) };
+    if (st.kind === 'trap') return { arrows: [[st.mv.to, st.victim.sq, 'r']], marks: [st.victim.sq] };
+    return null;
+  }
+  function near(st) { return st.kind && st.kind !== 'win' && st.i <= 2; }
   function explainMove(m) {
     var g = new Chess(game.fen()), mv = g.move({ from: m.from, to: m.to, promotion: 'q' });
     var out = { text: '', line: [mv.san] };
     if (!mv) return Promise.resolve(out);
     var p = punish(g, mv);
     function fromPv() {
-      var st = pvStory(m.pv || [], 6);
-      if (st.kind) { out.text = ' ' + storyText(st); out.line = st.line.slice(0, Math.max(3, st.i + 1)); }
+      var st = pvStory(m.pv || [], 4);
+      if (near(st)) { out.text = ' ' + storyText(st, 1); out.line = st.line.slice(0, Math.max(2, st.i + 1)); }
       else if (st.line.length > 1) out.line = st.line.slice(0, 3);
       return out;
     }
@@ -1139,7 +1163,7 @@
     if (!(top.mate > 0) && sc - material() * 100 < 200) return null;
     var g = new Chess(game.fen()), first = uciMove(g, top.uci); if (!first) return null;
     try { if (f && f.met && f.met(first)) return null; } catch (e) {}
-    var st = pvStory(top.pv, 6); if (!st.kind) return null;
+    var st = pvStory(top.pv, 4); if (!near(st)) return null;
     var ok = res.filter(function (l) { return sc - lineScore(l) <= 80; }).map(function (l) { return l.uci.slice(0, 4); });
     var tp = st.sq && game.get(st.sq);
     var look = st.kind === 'trap' && tp ? 'Look at ' + whose(tp.color) + ' ' + NAME[tp.type] + ' on ' + st.sq + '. Where can it go?'
@@ -1271,7 +1295,11 @@
      The in-browser engine is shallow, so a bare score drop is not trusted on its own. */
   /* The line Peek plays after a mistake: start position, moves, extra arrows, caption. */
   var whyLine = null;
-  function W(text, fen, sans, extra, rings) { whyLine = { fen: fen, sans: sans || [], arrows: extra || [], marks: rings || [], caption: text }; return text; }
+  function W(text, fen, sans, extra, rings, intro, st) {
+    whyLine = { fen: fen, sans: sans || [], arrows: extra || [], marks: rings || [], caption: text, intro: intro || '' };
+    if (st && st.kind && st.kind !== 'win') { whyLine.evI = st.i; whyLine.evCap = cap1(eventWords(st)) + '.'; whyLine.key = storyKey(st); }
+    return text;
+  }
   function pvSans(fen, pv, n) { var g = new Chess(fen), out = []; for (var i = 0; i < Math.min(n, (pv || []).length); i++) { var x = uciMove(g, pv[i]); if (!x) break; out.push(x.san); } return out; }
   /* "Qh4 wasn't a real threat (your king guards f2)" when the opponent's last move only looked dangerous. */
   function emptyThreat(fenBefore) {
@@ -1288,19 +1316,18 @@
   function whyBad(mv, fenBefore, l0, l1, drop) {
     whyLine = null;
     var fenAfter = game.fen(), g1 = new Chess(fenAfter), rm = l1 && l1.uci ? uciMove(g1, l1.uci) : null;
-    var st = l1 ? pvStory(l1.pv || [], 8) : { kind: null };
-    if (st.kind === 'mate') return W('That allows a forced mate: ' + st.line.join(' ') + '.', fenAfter, st.line);
-    if (st.kind && st.kind !== 'win') return W('That allows ' + (st.i > 0 ? st.line.slice(0, st.i).join(' ') + ', then ' + st.san + ' ' + st.desc : st.san + ', which ' + st.desc) + '.', fenAfter, st.line.slice(0, st.i + 1), [], st.sq ? [st.sq] : []);
+    var st = l1 ? pvStory(l1.pv || [], 4) : { kind: null };
+    if (near(st)) return W((st.i === 0 ? 'Next, ' + eventWords(st) : storyText(st).replace(/\.$/, '')) + '.', fenAfter, st.line.slice(0, st.i + 1), [], [], 'After your move:', st);
     var g0 = new Chess(fenBefore), best = l0 ? uciMove(new Chess(fenBefore), l0.uci) : null;
-    var st0 = l0 ? pvStory(l0.pv || [], 8, g0) : { kind: null };
+    var st0 = l0 ? pvStory(l0.pv || [], 4, g0) : { kind: null };
     /* a free (or cheaply won) piece you walked past */
     var fc = bestCapture(new Chess(fenBefore));
-    if (fc && fc.gain >= 2 && fc.move.san !== mv.san && (!best || best.san === fc.move.san || !st0.kind || st0.i >= 2) && !(mv.captured && VAL[mv.captured] >= VAL[fc.move.captured])) {
+    if (fc && fc.gain >= 2 && fc.move.san !== mv.san && (!best || best.san === fc.move.san || !near(st0)) && !(mv.captured && VAL[mv.captured] >= VAL[fc.move.captured])) {
       var et = emptyThreat(fenBefore);
-      return W('You missed ' + fc.move.san + ': ' + whose(opp()) + ' ' + NAME[fc.move.captured] + ' on ' + fc.move.to + (fc.re ? ' could be won' : ' was free') + (et ? ', and ' + et : '') + '.', fenBefore, [fc.move.san], [], [fc.move.to]);
+      return W('You missed ' + fc.move.san + ': ' + whose(opp()) + ' ' + NAME[fc.move.captured] + ' on ' + fc.move.to + (fc.re ? ' could be won' : ' was free') + (et ? ', and ' + et : '') + '.', fenBefore, [fc.move.san], [], [fc.move.to], 'What you missed:');
     }
-    if (best && best.san !== mv.san && st0.kind && st0.kind !== 'win') return W('You missed ' + best.san + ': ' + storyText(st0).replace(/^After /, 'after '), fenBefore, st0.line.slice(0, st0.i + 1), [], st0.sq ? [st0.sq] : []);
-    if (st.kind === 'win') return W('That lets ' + ON() + ' win material, starting with ' + st.line[0] + '.', fenAfter, st.line.slice(0, 6));
+    if (best && best.san !== mv.san && near(st0)) return W('You missed ' + best.san + ': ' + (st0.i === 0 ? eventWords(st0) + '.' : storyText(st0, 1).replace(/^After /, 'after ')), fenBefore, st0.line.slice(0, st0.i + 1), [], [], 'What you missed:', st0);
+    if (st.kind === 'win') return W('That lets ' + ON() + ' win material, starting with ' + st.line[0] + '.', fenAfter, st.line.slice(0, 4), [], [], 'After your move:');
     if (mv.piece === 'k' && mv.from === S('e1') && mv.san.indexOf('O-O') < 0) return W('Your king gives up castling and stays in the middle.', fenBefore, [], [[S('e1'), S('g1'), 'p']]);
     var home = rm && (rm.color === 'w' ? '1' : '8');
     var tempo = rm && !rm.captured && (rm.piece === 'p' || ((rm.piece === 'n' || rm.piece === 'b') && rm.from[1] === home));
@@ -1312,7 +1339,7 @@
   /* Engine verdict on your move: 'bad' for a blunder, 'meh' for a clear inaccuracy, null if fine. */
   function judge(mv, fenBefore, pre, p) {
     var fenAfter = game.fen();
-    function hangLine(q) { return { fen: fenAfter, sans: [q.move.san], arrows: [], caption: q.text }; }
+    function hangLine(q) { return { fen: fenAfter, sans: [q.move.san], arrows: [], caption: '', intro: 'After your move:' }; }
     var hang = p ? { level: 'bad', text: p.text, move: p.move, glimpse: hangLine(p) } : null;
     if (!engine.ready || engine.failed || !pre) return Promise.resolve(hang);
     var g2 = null; if (p) { g2 = new Chess(game.fen()); if (!g2.move(p.move.san) || g2.game_over()) g2 = null; }
@@ -1338,7 +1365,7 @@
         var hunt = pvSans(fenAfter, a1[0].pv, 3);
         return { level: drop >= 300 ? 'bad' : 'meh', drop: drop, move: null,
           text: kingWalk ? 'Your king gives up castling and stays in the middle.' : 'Your king walks out while the queens are on. Keep it behind its pawns.',
-          glimpse: hunt.length ? { fen: fenAfter, sans: hunt, arrows: [], marks: [mv.to], caption: 'How ' + ON() + ' goes after it: ' + hunt.join(' ') + '.' }
+          glimpse: hunt.length ? { fen: fenAfter, sans: hunt, arrows: [], marks: [], caption: '', intro: 'How ' + ON() + ' goes after your king:' }
             : { fen: fenBefore, sans: [], arrows: kingWalk ? [[S('e1'), S('g1'), 'p']] : [], marks: [mv.from], caption: 'Castling was still available.' } };
       }
       /* a concrete reason (a tactic allowed or missed, a piece chased) needs less evidence than a bare score drop */
@@ -1351,7 +1378,7 @@
       if (!why) {
         why = 'Costs about ' + (drop / 100).toFixed(1) + ' pawns of advantage' + (best ? '. ' + best.san + ' was stronger.' : '.');
         var bestLine = pvSans(fenBefore, a0[0].pv, 4), reply = pvSans(fenAfter, a1[0].pv, 1)[0];
-        gl = bestLine.length ? { fen: fenBefore, sans: bestLine, arrows: [], caption: 'Stronger: ' + bestLine.join(' ') + '.' + (reply ? ' Your move allows ' + reply + '.' : '') } : null;
+        gl = bestLine.length ? { fen: fenBefore, sans: bestLine.slice(0, 3), arrows: [], caption: '', intro: 'A stronger line:' } : null;
       }
       return { level: drop >= 300 ? 'bad' : 'meh', text: why, move: rm, glimpse: gl, arrow: /^You missed/.test(why) && best ? [best.from, best.to, 'p'] : rm ? [rm.from, rm.to, 'r'] : null, drop: drop };
     });
@@ -1377,7 +1404,7 @@
           if (j && j.arrow) arrows = [j.arrow]; else if (j && j.move) arrows = [[j.move.from, j.move.to, 'r']];
           draw();
           say(level === 'bad' ? 'bad' : 'ok', bad ? (bad.why ? bad.name + ': ' + bad.why : bad.text || 'You know this one: ' + bad.name + '.') : j.text, mv.san);
-          spar.why = bad && bad.line ? { fen: game.fen(), sans: bad.line.slice(0, 5), arrows: [], caption: bad.why || bad.name } : j && j.glimpse ? j.glimpse : null;
+          spar.why = bad && bad.line ? { fen: game.fen(), sans: bad.line.slice(0, 5), caps: bad.notes, arrows: [], caption: '', intro: 'Watch:' } : j && j.glimpse ? j.glimpse : null;
           peekHint();
           if (level === 'bad') spar.alarms++;
           actions([{ label: 'Take it back', go: takeBack }, { label: 'Play on anyway', go: function () { botMove(); } }]);
@@ -1416,7 +1443,7 @@
     });
   }
   /* Peek: while held, shows what Show me would draw, or after a mistake, how it goes wrong. */
-  var peekSave = null;
+  var peekSave = null, peekTimer = null;
   function peekHint() { var pk = $('#peek'); if (pk) pk.classList.toggle('ready', !!spar.why); var an = $('#answer'); if (an) an.classList.toggle('off', !!spar.why); }
   /* Answer: while held, shows the move itself (the lesson move, or the engine's best). */
   var ansSave = null, ansTok = 0;
@@ -1443,11 +1470,23 @@
     var gl = spar.why, f = focus;
     var save = { game: game, last: lastMove, arrows: arrows, marks: marks, badge: badge, hint: hintSq };
     if (gl) {
-      var g = new Chess(gl.fen), arr = [], last = null;
-      gl.sans.forEach(function (san) { var m = g.move(san); if (m) { arr.push([m.from, m.to, m.color === side ? 'p' : 'r']); last = m; } });
-      peekSave = save; game = g; lastMove = last; arrows = arr.concat(gl.arrows || []); marks = []; badge = null; hintSq = null;
-      if (gl.marks) marks = gl.marks.slice();
-      draw(); peekCap(gl.caption && gl.caption !== slotEl.textContent ? gl.caption : '');
+      /* one frame per move: only that move's arrow, with a caption in words; the key moment adds the fork or trap */
+      var g = new Chess(gl.fen), frames = [{ g: new Chess(gl.fen), last: null, arrows: (gl.arrows || []).slice(), marks: (gl.marks || []).slice(), cap: gl.intro || '' }];
+      gl.sans.forEach(function (san, i) {
+        var m = g.move(san); if (!m) return;
+        var fr = { g: new Chess(g.fen()), last: m, arrows: [[m.from, m.to, m.color === side ? 'p' : 'r']], marks: [], cap: (gl.caps && gl.caps[i]) || cap1(moveWords(m)) + '.' };
+        if (gl.evI === i) { fr.cap = gl.evCap; if (gl.key) { fr.arrows = fr.arrows.concat(gl.key.arrows); fr.marks = gl.key.marks; } }
+        else if (i === gl.sans.length - 1 && gl.marks && gl.marks.length) fr.marks = gl.marks.slice();
+        frames.push(fr);
+      });
+      peekSave = save; badge = null; hintSq = null;
+      var showFrame = function (k) {
+        if (!peekSave) return;
+        var fr = frames[k]; game = fr.g; lastMove = fr.last; arrows = fr.arrows; marks = fr.marks;
+        draw(fr.last); peekCap(fr.cap); if (fr.last) moveSound(fr.last);
+        if (k + 1 < frames.length) peekTimer = setTimeout(function () { showFrame(k + 1); }, k === 0 ? 900 : 1600);
+      };
+      showFrame(frames.length > 1 && !frames[0].cap ? 1 : 0);
     } else if (f && !locked) {
       var pa = (f.arrows || []).slice(), pm = (f.marks || []).slice();
       if (f.peek) { pa = pa.concat(f.peek.arrows || []); pm = pm.concat(f.peek.marks || []); }
@@ -1457,6 +1496,7 @@
     var pk = $('#peek'); if (pk) pk.classList.add('held');
   }
   function peekEnd() {
+    clearTimeout(peekTimer); peekTimer = null;
     var pk = $('#peek'); if (pk) pk.classList.remove('held');
     if (!peekSave) return;
     var s0 = peekSave; peekSave = null;
@@ -1593,6 +1633,9 @@
   soundLabel();
   window.addEventListener('hashchange', function () { var h = location.hash.slice(1); if (h && h !== mode) setMode(h); });
 
+  if ('serviceWorker' in navigator && (/\.github\.io$/.test(location.hostname) || location.hostname === 'localhost')) {
+    try { navigator.serviceWorker.register('sw.js').catch(function () {}); } catch (e) {}
+  }
   function start(data) {
     buildBoard(); sideLabel(); engineStart();
     var h = (location.hash || '').slice(1);
