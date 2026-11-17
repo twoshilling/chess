@@ -744,7 +744,7 @@
       w.postMessage('uci');
     } catch (e) { engine.failed = true; }
   }
-  function analyse(ms, g) {
+  function analyse(ms, g, only) {
     g = g || game;
     var fen = g.fen(), h = g.history({ verbose: true });
     function job() {
@@ -756,7 +756,7 @@
         var replay = new Chess(); h.forEach(function (m) { replay.move(m); });
         if (h.length && replay.fen() === fen) engine.w.postMessage('position startpos moves ' + h.map(function (m) { return m.from + m.to + (m.promotion || ''); }).join(' '));
         else engine.w.postMessage('position fen ' + fen);
-        engine.w.postMessage('go movetime ' + ms);
+        engine.w.postMessage('go movetime ' + ms + (only ? ' searchmoves ' + only : ''));
         setTimeout(function () { if (!done) { done = true; engine.cb = null; try { engine.w.postMessage('stop'); } catch (e) {} res(null); } }, ms + 4000);
       });
     }
@@ -1007,8 +1007,9 @@
     return { now: now, soon: soon, arrows: arr.slice(0, 5), join: join };
   }
   function developed(color) {
-    var home = color === 'w' ? ['b1', 'g1', 'c1', 'f1'] : ['b8', 'g8', 'c8', 'f8'], n = 0;
-    find(color, 'n').concat(find(color, 'b')).forEach(function (sq) { if (home.indexOf(sq) < 0) n++; });
+    var r = color === 'w' ? '1' : '8', n = 0;
+    find(color, 'n').forEach(function (sq) { if (sq !== 'b' + r && sq !== 'g' + r) n++; });
+    find(color, 'b').forEach(function (sq) { if (sq !== 'c' + r && sq !== 'f' + r) n++; });
     return n;
   }
   function mobility(sq, g) { g = g || game; var p = g.get(sq), n = 0; attacksFrom(sq, g).forEach(function (t) { var q = g.get(t); if (!q || q.color !== p.color) n++; }); return n; }
@@ -1240,6 +1241,55 @@
     preAnalyse();
     guideNow();
   }
+  /* One line on why a move is a mistake. g1 is after the opponent's best reply rm. */
+  /* One line on why a move is a mistake, or null when there is nothing concrete to point at.
+     The in-browser engine is shallow, so a bare score drop is not trusted on its own. */
+  function whyBad(mv, fenBefore, l0, l1, drop) {
+    var g1 = new Chess(game.fen()), rm = l1 && l1.uci ? uciMove(g1, l1.uci) : null;
+    var st = l1 ? pvStory(l1.pv || [], 8) : { kind: null };
+    if (st.kind === 'mate') return 'That allows a forced mate: ' + st.line.join(' ') + '.';
+    if (st.kind && st.kind !== 'win') return 'That allows ' + (st.i > 0 ? st.line.slice(0, st.i).join(' ') + ', then ' + st.san + ' ' + st.desc : st.san + ', which ' + st.desc) + '.';
+    var g0 = new Chess(fenBefore), best = l0 ? uciMove(new Chess(fenBefore), l0.uci) : null;
+    var st0 = l0 ? pvStory(l0.pv || [], 8, g0) : { kind: null };
+    if (best && best.san !== mv.san && st0.kind && st0.kind !== 'win') return 'You missed ' + best.san + ': ' + storyText(st0).replace(/^After /, 'after ');
+    if (st.kind === 'win') return 'That lets ' + ON() + ' win material: ' + st.line.join(' ') + '.';
+    if (mv.piece === 'k' && mv.from === S('e1') && mv.san.indexOf('O-O') < 0) return 'Your king gives up castling and stays in the middle.';
+    var home = rm && (rm.color === 'w' ? '1' : '8');
+    var tempo = rm && !rm.captured && (rm.piece === 'p' || ((rm.piece === 'n' || rm.piece === 'b') && rm.from[1] === home));
+    var chased = tempo && attacksFrom(rm.to, g1).indexOf(mv.to) >= 0 && g1.get(mv.to) && g1.get(mv.to).color === side;
+    if (chased && mv.piece === 'q') return 'Queen out early: ' + rm.san + ' hits it and ' + ON() + ' develops with tempo.';
+    if (chased && VAL[mv.piece] >= 3) return 'Your ' + NAME[mv.piece] + ' gets chased: ' + rm.san + ' hits it and gains time.';
+    return null;
+  }
+  /* Engine verdict on your move: 'bad' for a blunder, 'meh' for a clear inaccuracy, null if fine. */
+  function judge(mv, fenBefore, pre, p) {
+    var hang = p ? { level: 'bad', text: p.text, move: p.move } : null;
+    if (!engine.ready || engine.failed || !pre) return Promise.resolve(hang);
+    var g2 = null; if (p) { g2 = new Chess(game.fen()); if (!g2.move(p.move.san) || g2.game_over()) g2 = null; }
+    var uci = mv.from + mv.to + (mv.promotion || '');
+    return pre.then(function (a0) {
+      /* score your move in the same position and at the same depth as the best move: far less noisy than comparing two searches */
+      var same = a0 && a0.filter(function (l) { return l.uci === uci || l.uci.slice(0, 4) === uci; })[0];
+      return Promise.all([a0, same ? null : analyse(450, new Chess(fenBefore), uci), g2 ? analyse(350, g2) : null, same]);
+    }).then(function (r) {
+      var a0 = r[0], a2 = r[2], same = r[3] || (r[1] && r[1][0]);
+      if (!a0 || !a0.length || !same || same.uci.slice(0, 4) !== uci.slice(0, 4)) return hang;
+      var before = clampScore(lineScore(a0[0])), after = clampScore(lineScore(same)), drop = before - after;
+      var a1 = [{ uci: (same.pv || [])[1] || '', pv: (same.pv || []).slice(1) }];
+      if (p && a2 && a2.length && clampScore(lineScore(a2[0])) >= before - 120) p = null;
+      if (p && drop < 120) p = null;
+      if (p) return { level: 'bad', text: p.text, move: p.move, drop: drop };
+      var kingWalk = mv.piece === 'k' && mv.from === S('e1') && mv.san.indexOf('O-O') < 0 && new Chess(fenBefore).fen().split(' ')[2].indexOf(side === 'w' ? 'K' : 'k') >= 0 && !new Chess(fenBefore).in_check();
+      if (kingWalk && drop >= 50 && drop < 300) return { level: 'meh', text: 'Your king gives up castling and stays in the middle.', move: null, drop: drop };
+      /* a concrete reason (a tactic allowed or missed, a piece chased) needs less evidence than a bare score drop */
+      if (drop < 110 || (after >= 400 && drop < 400)) return { level: null, drop: drop };
+      var g = new Chess(game.fen()), rm = a1[0].uci ? uciMove(g, a1[0].uci) : null;
+      var why = whyBad(mv, fenBefore, a0[0], a1[0].uci ? a1[0] : null, drop), best = uciMove(new Chess(fenBefore), a0[0].uci);
+      if (!why && drop < 300) return { level: null, drop: drop };
+      if (!why) why = 'Costs about ' + (drop / 100).toFixed(1) + ' pawns of advantage' + (best ? '. ' + best.san + ' was stronger.' : '.');
+      return { level: drop >= 300 ? 'bad' : 'meh', text: why, move: rm, arrow: /^You missed/.test(why) && best ? [best.from, best.to, 'p'] : rm ? [rm.from, rm.to, 'r'] : null, drop: drop };
+    });
+  }
   function sparMove(mv, fen) {
     if (gameOver()) return;
     function takeBack() { rewind(fen); locked = false; draw(); preAnalyse(); guideNow(); }
@@ -1247,35 +1297,46 @@
       game.undo(); var r = repHere(); game.move(mv);
       if (r) {
         if (r.s.good[mv.san]) { sfx('good'); badge = { sq: mv.to, kind: 'yes' }; draw(); say('good', r.s.good[mv.san], mv.san); botMove(); return; }
-        var bad = r.s.bad && r.s.bad[mv.san], ok = r.s.ok && r.s.ok[mv.san], pp = punish(game, mv);
-        sfx(ok ? 'ok' : 'bad'); badge = { sq: mv.to, kind: ok ? 'meh' : 'no' };
-        if (pp) arrows = [[pp.move.from, pp.move.to, 'r']];
-        draw();
-        say(ok ? 'ok' : 'bad', ok || (bad ? (bad.text || 'You know this one: ' + bad.name + '.') : pp ? pp.text : 'Not your lesson move here.'), mv.san);
-        if (!ok) spar.alarms++;
-        actions([{ label: 'Take it back', go: takeBack }, { label: 'Play on anyway', go: function () { botMove(); } }]);
+        var bad = r.s.bad && r.s.bad[mv.san], ok = r.s.ok && r.s.ok[mv.san], lessonMove = mainOf(r.s), mine0 = run, pre0 = spar.pre; spar.pre = null;
+        showFocus(null); locked = true;
+        judge(mv, fen, pre0, punish(game, mv)).then(function (j) {
+          if (mine0 !== run) return;
+          var level = bad ? 'bad' : j && j.level ? j.level : null;
+          if (!level) {
+            sfx('ok'); badge = { sq: mv.to, kind: 'meh' }; draw();
+            say('ok', ok || 'Playable. The lesson move was ' + lessonMove + '.', mv.san);
+            botMove(); return;
+          }
+          sfx(level === 'bad' ? 'bad' : 'ok'); badge = { sq: mv.to, kind: level === 'bad' ? 'no' : 'meh' };
+          if (j && j.arrow) arrows = [j.arrow]; else if (j && j.move) arrows = [[j.move.from, j.move.to, 'r']];
+          draw();
+          say(level === 'bad' ? 'bad' : 'ok', bad ? (bad.why ? bad.name + ': ' + bad.why : bad.text || 'You know this one: ' + bad.name + '.') : j.text, mv.san);
+          if (level === 'bad') spar.alarms++;
+          actions([{ label: 'Take it back', go: takeBack }, { label: 'Play on anyway', go: function () { botMove(); } }]);
+        });
         return;
       }
     }
     var f = focus; showFocus(null);
-    if (store.guide && shieldPush(mv) && !(f && f.met && f.name === 'Safety')) {
+    if (store.guide && shieldPush(mv) && !(f && f.met && f.name === 'Safety') && !punish(game, mv)) {
       sfx('ok'); badge = { sq: mv.to, kind: 'meh' }; draw();
       say('ok', 'King safety: that pawn was part of your king\'s shield. It can never go back.', mv.san);
       actions([{ label: 'Take it back', go: takeBack }, { label: 'Play on anyway', go: function () { botMove(); } }]);
       return;
     }
     var my = run, pre = spar.pre; spar.pre = null;
-    engineVerdict(pre, mv, punish(game, mv)).then(function (p) {
+    judge(mv, fen, pre, punish(game, mv)).then(function (j) {
       if (my !== run) return;
+      var p = j && j.level ? j : null;
       var praised = false;
       if (store.guide && f && f.met && !p) {
         if (f.met(mv)) { praised = true; sfx('good'); badge = { sq: mv.to, kind: 'yes' }; draw(); if (phone()) { say('good', f.done, mv.san); var af = f.after ? f.after(mv) : ''; setSub(af ? af.charAt(0).toUpperCase() + af.slice(1) : ''); } else say('good', f.name + ': ' + (f.after ? f.after(mv) : f.done.charAt(0).toLowerCase() + f.done.slice(1)), mv.san); }
         else if (f.still) { var stl = f.still(mv); if (stl) { if (phone()) { say('ok', f.name, mv.san); setSub(stl.charAt(0).toUpperCase() + stl.slice(1)); } else say('ok', f.name + ': ' + stl, mv.san); } }
       }
       if (store.coach && !praised && p) {
-        spar.alarms++;
-        sfx('bad'); badge = { sq: mv.to, kind: 'no' }; arrows = [[p.move.from, p.move.to, 'r']]; draw();
-        say('bad', p.text, mv.san);
+        if (p.level === 'bad') spar.alarms++;
+        sfx(p.level === 'bad' ? 'bad' : 'ok'); badge = { sq: mv.to, kind: p.level === 'bad' ? 'no' : 'meh' }; if (p.arrow) arrows = [p.arrow]; else if (p.move) arrows = [[p.move.from, p.move.to, 'r']]; draw();
+        say(p.level === 'bad' ? 'bad' : 'ok', p.text, mv.san);
         actions([
           { label: 'Take it back', go: takeBack },
           { label: 'Play on anyway', go: function () { botMove(); } }
@@ -1401,5 +1462,5 @@
   if (hot && hot.snapshot) hot.snapshot(function () { return { mode: mode, li: li, si: Math.min(si, LESSONS[li].steps.length - 1) }; });
   if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
 
-  window.__trainer = { state: function () { return { mode: mode, side: side, li: li, si: si, locked: locked, focus: focus ? focus.name : null, fen: game.fen(), over: lessonOver, tap: nextTap(), why: whyOpen }; }, engine: function () { return { ready: engine.ready, failed: engine.failed }; }, show: function (fen) { setGame(new Chess(fen)); var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return (m && m.san) + ' / ' + f.name + ' / quick: ' + suggestMove(f).san; }); }, best: function () { var r = repHere(); if (r) return mainOf(r.s); var m = suggestMove(focus || chooseFocus()); return m && m.san; }, verdict: function (fen, san) { run++; setGame(new Chess(fen)); var pre = analyse(450); var mv = game.move(san); var p0 = punish(game, mv); return engineVerdict(pre, mv, p0).then(function (p) { return 'simple check: ' + (p0 ? p0.text : 'none') + ' => final: ' + (p ? p.text + ' (' + p.move.san + ')' : 'no alarm'); }); }, sparAt: function (moves) { setMode('spar'); run++; var g = new Chess(); moves.split(' ').forEach(function (m) { g.move(m); }); resetRibbon(0); setGame(g); spar.over = false; locked = false; draw(); preAnalyse(); guideNow(); }, raw: function (fen, ms) { setGame(new Chess(fen)); return analyse(ms).then(function (r) { return (r || []).map(function (l) { return l.uci + ' ' + (l.mate != null ? 'M' + l.mate : l.cp) + ' | ' + (l.pv || []).slice(0, 5).join(' '); }); }); }, story: function (fen) { run++; setGame(new Chess(fen)); return analyse(900).then(function (res) { var f = chooseFocus(); var t = tacticFocus(res, f); return { focus: f.name, tactic: t && { text: t.text, why: t.why, after: t.after() }, best: res[0] && storyText(pvStory(res[0].pv, 6)) }; }); }, show: function (fen) { run++; setGame(new Chess(fen)); locked = false; var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return explainMove(m).then(function (ex) { return (m.engine ? 'engine ' : 'fallback ') + m.san + ' |' + ex.text + ' | ' + ex.line.join(' '); }); }); }, engineReady: function () { return engine.ready && !engine.failed; }, botSearch: botSearch, suggest: function (fen) { setGame(new Chess(fen)); return suggestMove(chooseFocus()).san + ' / ' + chooseFocus().name; }, peek: function (fen) { setGame(new Chess(fen)); locked = false; focusEl.hidden = false; focusEl.textContent = ''; var h = worstPieceHint(), out = []; h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(marks)); h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(arrows)); return out; } };
+  window.__trainer = { state: function () { return { mode: mode, side: side, li: li, si: si, locked: locked, focus: focus ? focus.name : null, fen: game.fen(), over: lessonOver, tap: nextTap(), why: whyOpen }; }, engine: function () { return { ready: engine.ready, failed: engine.failed }; }, show: function (fen) { setGame(new Chess(fen)); var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return (m && m.san) + ' / ' + f.name + ' / quick: ' + suggestMove(f).san; }); }, best: function () { var r = repHere(); if (r) return mainOf(r.s); var m = suggestMove(focus || chooseFocus()); return m && m.san; }, verdict: function (fen, san) { run++; setGame(new Chess(fen)); var pre = analyse(450); var mv = game.move(san); var p0 = punish(game, mv); return engineVerdict(pre, mv, p0).then(function (p) { return 'simple check: ' + (p0 ? p0.text : 'none') + ' => final: ' + (p ? p.text + ' (' + p.move.san + ')' : 'no alarm'); }); }, sparAt: function (moves) { setMode('spar'); run++; var g = new Chess(); moves.split(' ').forEach(function (m) { g.move(m); }); resetRibbon(0); setGame(g); spar.over = false; locked = false; draw(); preAnalyse(); guideNow(); }, raw: function (fen, ms) { setGame(new Chess(fen)); return analyse(ms).then(function (r) { return (r || []).map(function (l) { return l.uci + ' ' + (l.mate != null ? 'M' + l.mate : l.cp) + ' | ' + (l.pv || []).slice(0, 5).join(' '); }); }); }, judgeAt: function (moves, san) { run++; var g = new Chess(); moves.split(' ').forEach(function (m) { g.move(m); }); setGame(g); var fen = g.fen(), pre = analyse(450); var mv = game.move(san); return judge(mv, fen, pre, punish(game, mv)).then(function (j) { return j ? (j.level || 'fine') + ' (' + j.drop + ') ' + (j.text || '') : 'none'; }); }, story: function (fen) { run++; setGame(new Chess(fen)); return analyse(900).then(function (res) { var f = chooseFocus(); var t = tacticFocus(res, f); return { focus: f.name, tactic: t && { text: t.text, why: t.why, after: t.after() }, best: res[0] && storyText(pvStory(res[0].pv, 6)) }; }); }, show: function (fen) { run++; setGame(new Chess(fen)); locked = false; var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return explainMove(m).then(function (ex) { return (m.engine ? 'engine ' : 'fallback ') + m.san + ' |' + ex.text + ' | ' + ex.line.join(' '); }); }); }, engineReady: function () { return engine.ready && !engine.failed; }, botSearch: botSearch, suggest: function (fen) { setGame(new Chess(fen)); return suggestMove(chooseFocus()).san + ' / ' + chooseFocus().name; }, peek: function (fen) { setGame(new Chess(fen)); locked = false; focusEl.hidden = false; focusEl.textContent = ''; var h = worstPieceHint(), out = []; h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(marks)); h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(arrows)); return out; } };
 })();
