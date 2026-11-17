@@ -1244,6 +1244,7 @@
     if (side === 'b') san = whiteBotMove();
     else { var opts = game.history().length === 5 ? FIRST[spar.opening] : BOOK[posKey(game)]; if (opts && opts.length) san = pick(opts); else san = botSearch(); }
     var m = playSan(san);
+    setSlot('', ''); setSub('');
     say(m.color === 'b' ? 'black' : 'white', '', m.san);
     if (gameOver()) return;
     if (store.coach && !store.guide) {
@@ -1301,8 +1302,18 @@
       if (p && a2 && a2.length && clampScore(lineScore(a2[0])) >= before - 120) p = null;
       if (p && drop < 120) p = null;
       if (p) return { level: 'bad', text: p.text, move: p.move, drop: drop, glimpse: hangLine(p) };
-      var kingWalk = mv.piece === 'k' && mv.from === S('e1') && mv.san.indexOf('O-O') < 0 && new Chess(fenBefore).fen().split(' ')[2].indexOf(side === 'w' ? 'K' : 'k') >= 0 && !new Chess(fenBefore).in_check();
-      if (kingWalk && drop >= 50 && drop < 300) return { level: 'meh', text: 'Your king gives up castling and stays in the middle.', move: null, drop: drop, glimpse: { fen: fenBefore, sans: [], arrows: [[S('e1'), S('g1'), 'p']], caption: 'Castling was still available.' } };
+      /* king moves are judged by rule: the shallow engine often misses how dangerous a walking king is */
+      var g0k = new Chess(fenBefore), wasCheck = g0k.in_check(), isBest = a0[0].uci.slice(0, 4) === uci.slice(0, 4);
+      var kingWalk = mv.piece === 'k' && mv.from === S('e1') && mv.san.indexOf('O-O') < 0 && g0k.fen().split(' ')[2].indexOf(side === 'w' ? 'K' : 'k') >= 0 && !wasCheck;
+      var fwd = side === 'w' ? +mv.to[1] > +mv.from[1] : +mv.to[1] < +mv.from[1];
+      var kingOut = mv.piece === 'k' && mv.san.indexOf('O-O') < 0 && !wasCheck && fwd && find(opp(), 'q').length > 0;
+      if ((kingWalk || kingOut) && !isBest && drop > 30) {
+        var hunt = pvSans(fenAfter, a1[0].pv, 3);
+        return { level: drop >= 300 ? 'bad' : 'meh', drop: drop, move: null,
+          text: kingWalk ? 'Your king gives up castling and stays in the middle.' : 'Your king walks out while the queens are on. Keep it behind its pawns.',
+          glimpse: hunt.length ? { fen: fenAfter, sans: hunt, arrows: [], marks: [mv.to], caption: 'How ' + ON() + ' goes after it: ' + hunt.join(' ') + '.' }
+            : { fen: fenBefore, sans: [], arrows: kingWalk ? [[S('e1'), S('g1'), 'p']] : [], marks: [mv.from], caption: 'Castling was still available.' } };
+      }
       /* a concrete reason (a tactic allowed or missed, a piece chased) needs less evidence than a bare score drop */
       if (drop < 110 || (after >= 400 && drop < 400)) return { level: null, drop: drop };
       var g = new Chess(game.fen()), rm = a1[0].uci ? uciMove(g, a1[0].uci) : null;
