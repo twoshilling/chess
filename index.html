@@ -39,7 +39,8 @@ body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16p
 button,select,input{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
-.wrap{max-width:1280px;margin:0 auto;padding:18px 20px 40px}
+.wrap{max-width:1280px;margin:0 auto;padding:18px 20px 40px;position:relative}
+.ver{position:absolute;top:3px;left:20px;font-family:var(--mono);font-size:10px;line-height:1;color:var(--muted);opacity:.75;pointer-events:none}
 
 /* header */
 .top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px 28px;padding-bottom:16px;border-bottom:1px solid var(--line)}
@@ -222,7 +223,8 @@ h1 em{font-weight:500;color:var(--accent)}
 .focus .fname strong{margin:4px 0 6px}
 @media (max-width:700px){
   /* phone: prompt above the board, answers right under it, reference material below */
-  .wrap{padding:8px 12px 28px}
+  .wrap{padding:16px 12px 28px}
+  .ver{left:12px;top:4px}
   .top{padding-bottom:8px;border-bottom:0;gap:0}
   .top .eyebrow,.top h1,#sound,#tab-rules{display:none}
   .top>div:first-child{display:none}
@@ -299,6 +301,7 @@ h1 em{font-weight:500;color:var(--accent)}
 </svg>
 
 <div class="wrap">
+  <span class="ver" id="ver">v1.7</span>
   <header class="top">
     <div>
       <span class="eyebrow">1.e4 e5 2.Nf3 Nc6 3.Bc4</span>
