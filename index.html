@@ -301,7 +301,7 @@ h1 em{font-weight:500;color:var(--accent)}
 </svg>
 
 <div class="wrap">
-  <span class="ver" id="ver">v1.9</span>
+  <span class="ver" id="ver">v1.10</span>
   <header class="top">
     <div>
       <span class="eyebrow">1.e4 e5 2.Nf3 Nc6 3.Bc4</span>
@@ -1142,9 +1142,10 @@ const BOOK_EXTRA_B = [
   function preText(q) { return phone() && q.qs ? q.qs : q.q; }
 
   /* ---------- saved progress (this browser only) ---------- */
-  var store = { done: {}, found: {}, drill: {}, best: 0, coach: true, sound: true, guide: true, glevel: 2, gstreak: 0, gmiss: 0 };
+  var store = { done: {}, found: {}, drill: {}, best: 0, coach: true, sound: true, guide: true, glevel: 3, gstreak: 0, gmiss: 0 };
   try { var raw = JSON.parse(localStorage.getItem('italian-trainer') || '{}'); for (var k in raw) store[k] = raw[k]; } catch (e) {}
-  if (!(store.glevel >= 1 && store.glevel <= 4)) store.glevel = 2;
+  if (!(store.glevel >= 1 && store.glevel <= 4)) store.glevel = 3;
+  if (store.gdef !== 3) { store.glevel = 3; store.gdef = 3; }
   store.guide = store.glevel < 4;
   function save() { try { localStorage.setItem('italian-trainer', JSON.stringify(store)); } catch (e) {} }
 
@@ -2398,6 +2399,18 @@ const BOOK_EXTRA_B = [
   var whyLine = null;
   function W(text, fen, sans, extra, rings) { whyLine = { fen: fen, sans: sans || [], arrows: extra || [], marks: rings || [], caption: text }; return text; }
   function pvSans(fen, pv, n) { var g = new Chess(fen), out = []; for (var i = 0; i < Math.min(n, (pv || []).length); i++) { var x = uciMove(g, pv[i]); if (!x) break; out.push(x.san); } return out; }
+  /* "Qh4 wasn't a real threat (your king guards f2)" when the opponent's last move only looked dangerous. */
+  function emptyThreat(fenBefore) {
+    var hist = game.history({ verbose: true }), last = hist.length >= 2 ? hist[hist.length - 2] : null;
+    if (!last || last.color === side) return '';
+    var g = new Chess(fenBefore), fl = flip(g); if (!fl) return '';
+    var hit = attacksFrom(last.to, g).filter(function (sq) { var p = g.get(sq); return p && p.color === side && p.type !== 'k'; });
+    if (!hit.length || hit.some(function (sq) { return capGain(fl, sq) > 0; })) return '';
+    hit.sort(function (a, b) { return VAL[g.get(b).type] - VAL[g.get(a).type]; });
+    var sq = hit[0], guard = null;
+    for (var n in sqEls) { var p = g.get(n); if (p && p.color === side && n !== sq && attacksFrom(n, g).indexOf(sq) >= 0 && (!guard || VAL[p.type] < VAL[guard.type])) guard = { type: p.type, sq: n }; }
+    return guard ? last.san + ' wasn\'t a real threat (your ' + NAME[guard.type] + ' guards ' + sq + ')' : '';
+  }
   function whyBad(mv, fenBefore, l0, l1, drop) {
     whyLine = null;
     var fenAfter = game.fen(), g1 = new Chess(fenAfter), rm = l1 && l1.uci ? uciMove(g1, l1.uci) : null;
@@ -2406,6 +2419,12 @@ const BOOK_EXTRA_B = [
     if (st.kind && st.kind !== 'win') return W('That allows ' + (st.i > 0 ? st.line.slice(0, st.i).join(' ') + ', then ' + st.san + ' ' + st.desc : st.san + ', which ' + st.desc) + '.', fenAfter, st.line.slice(0, st.i + 1), [], st.sq ? [st.sq] : []);
     var g0 = new Chess(fenBefore), best = l0 ? uciMove(new Chess(fenBefore), l0.uci) : null;
     var st0 = l0 ? pvStory(l0.pv || [], 8, g0) : { kind: null };
+    /* a free (or cheaply won) piece you walked past */
+    var fc = bestCapture(new Chess(fenBefore));
+    if (fc && fc.gain >= 2 && fc.move.san !== mv.san && (!best || best.san === fc.move.san || !st0.kind || st0.i >= 2) && !(mv.captured && VAL[mv.captured] >= VAL[fc.move.captured])) {
+      var et = emptyThreat(fenBefore);
+      return W('You missed ' + fc.move.san + ': ' + whose(opp()) + ' ' + NAME[fc.move.captured] + ' on ' + fc.move.to + (fc.re ? ' could be won' : ' was free') + (et ? ', and ' + et : '') + '.', fenBefore, [fc.move.san], [], [fc.move.to]);
+    }
     if (best && best.san !== mv.san && st0.kind && st0.kind !== 'win') return W('You missed ' + best.san + ': ' + storyText(st0).replace(/^After /, 'after '), fenBefore, st0.line.slice(0, st0.i + 1), [], st0.sq ? [st0.sq] : []);
     if (st.kind === 'win') return W('That lets ' + ON() + ' win material, starting with ' + st.line[0] + '.', fenAfter, st.line.slice(0, 6));
     if (mv.piece === 'k' && mv.from === S('e1') && mv.san.indexOf('O-O') < 0) return W('Your king gives up castling and stays in the middle.', fenBefore, [], [[S('e1'), S('g1'), 'p']]);
@@ -2449,7 +2468,8 @@ const BOOK_EXTRA_B = [
             : { fen: fenBefore, sans: [], arrows: kingWalk ? [[S('e1'), S('g1'), 'p']] : [], marks: [mv.from], caption: 'Castling was still available.' } };
       }
       /* a concrete reason (a tactic allowed or missed, a piece chased) needs less evidence than a bare score drop */
-      if (drop < 110 || (after >= 400 && drop < 400)) return { level: null, drop: drop };
+      var fcB = bestCapture(new Chess(fenBefore)), missedFree = fcB && fcB.gain >= 3 && fcB.move.san !== mv.san && !(mv.captured && VAL[mv.captured] >= VAL[fcB.move.captured]);
+      if (drop < 110 || (after >= 400 && drop < 400 && !(missedFree && drop >= 200))) return { level: null, drop: drop };
       var g = new Chess(game.fen()), rm = a1[0].uci ? uciMove(g, a1[0].uci) : null;
       var why = whyBad(mv, fenBefore, a0[0], a1[0].uci ? a1[0] : null, drop), best = uciMove(new Chess(fenBefore), a0[0].uci);
       if (!why && drop < (engine.strong ? 200 : 300)) return { level: null, drop: drop };
