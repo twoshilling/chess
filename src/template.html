@@ -211,6 +211,14 @@ h1 em{font-weight:500;color:var(--accent)}
 }
 .mlabel,.more,.lastv{display:none}
 .fname{all:unset;display:block}
+.peekcap{position:absolute;left:0;right:0;bottom:0;z-index:8;padding:9px 12px;background:rgba(14,21,18,.86);color:#f1f4ef;font-size:14px;font-weight:600;line-height:1.35;pointer-events:none;opacity:0;transform:translateY(100%);transition:opacity .12s,transform .12s}
+.peekcap.on{opacity:1;transform:none}
+.peekcap.top{bottom:auto;top:0;transform:translateY(-100%)}
+.peekcap.top.on{transform:none}
+.btn.peek{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.btn.peek.ready{border-color:var(--hot);color:var(--hot)}
+.btn.peek.held{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.focus.tell .fname strong{font-size:24px}
 .focus .fname strong{margin:4px 0 6px}
 @media (max-width:700px){
   /* phone: prompt above the board, answers right under it, reference material below */
@@ -265,6 +273,11 @@ h1 em{font-weight:500;color:var(--accent)}
   .under .btn{border:0;background:none;padding:8px 8px;font-size:0;color:var(--muted)}
   .under .btn::after{content:attr(data-short);font-size:13px;font-weight:600}
   .under .btn.pri{background:none;color:var(--accent)}
+  .under .btn.peek.ready{color:var(--hot)}
+  .under .btn.peek.held{background:var(--ink);color:var(--bg);border-radius:7px}
+  .focus.tell .fname{cursor:default}
+  .focus.tell .fname::after{display:none}
+  .focus.tell .fname strong{font-size:14px}
   .ribbon{order:70;margin-top:8px}
   .legend{order:71;margin:0}
   .strip{order:72;margin:0}
