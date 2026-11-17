@@ -21,9 +21,10 @@ Progress is saved in the browser you use.
 |---|---|
 | `index.html` | The whole trainer (built file) |
 | `chess.js` | Chess rules library (chess.js 0.10.3, BSD licence) |
-| `stockfish.js` | Stockfish 10 engine, used for "Show the move" and the blunder check |
-| `stockfish-licence.txt` | Stockfish's GPL-3.0 licence |
-| `src/` | Sources: lessons, app code, page template, build and validation scripts |
+| `stockfish-19-lite-single.js`, `.wasm` | Stockfish 19 lite engine (WebAssembly), used for "Show the move", the Tactic priority and the mistake checks |
+| `stockfish.js` | Stockfish 10, the fallback if the newer engine cannot start |
+| `stockfish-19-licence.txt`, `stockfish-licence.txt` | Stockfish's GPL-3.0 licence |
+| `src/` | Sources: lessons, app code, page template, build and validation scripts; `src/vendor/` holds the Stockfish 19 files |
 
 ## Rebuild
 

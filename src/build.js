@@ -7,4 +7,5 @@ fs.writeFileSync(out + '/index.html', t.replace('/*LESSONS*/', () => lessons).re
 fs.copyFileSync('node_modules/chess.js/chess.js', out + '/chess.js');
 fs.copyFileSync('node_modules/stockfish.js/stockfish.js', out + '/stockfish.js');
 fs.copyFileSync('node_modules/stockfish.js/Copying.txt', out + '/stockfish-licence.txt');
+for (const f of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'stockfish-19-licence.txt']) fs.copyFileSync('vendor/' + f, out + '/' + f);
 console.log('built', fs.statSync(out + '/index.html').size);

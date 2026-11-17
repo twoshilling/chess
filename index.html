@@ -301,7 +301,7 @@ h1 em{font-weight:500;color:var(--accent)}
 </svg>
 
 <div class="wrap">
-  <span class="ver" id="ver">v1.8</span>
+  <span class="ver" id="ver">v1.9</span>
   <header class="top">
     <div>
       <span class="eyebrow">1.e4 e5 2.Nf3 Nc6 3.Bc4</span>
@@ -1859,13 +1859,18 @@ const BOOK_EXTRA_B = [
   /* A sound move that fits the principle: safe first, then on-principle, then active. */
   /* ---------- real engine (Stockfish, in a worker) for Show the move ---------- */
   var engine = { w: null, ready: false, failed: false, cb: null, lines: {} };
-  function engineStart() {
+  /* Stockfish 19 lite (WebAssembly) first; the older Stockfish 10 is the backup if it cannot start. */
+  function engineStart(file) {
+    file = file || 'stockfish-19-lite-single.js';
+    var strong = file !== 'stockfish.js', settled = false;
+    function fallback() { if (settled || !strong) { engine.failed = !strong; return; } settled = true; try { engine.w.terminate(); } catch (e) {} engine.ready = false; engine.failed = false; engineStart('stockfish.js'); }
     try {
-      var w = new Worker('stockfish.js'); engine.w = w;
+      var w = new Worker(file); engine.w = w; engine.strong = strong;
+      var timer = setTimeout(function () { if (!engine.ready) fallback(); }, 8000);
       w.onmessage = function (e) {
         var l = String(e.data);
         if (l === 'uciok') { w.postMessage('setoption name MultiPV value 4'); w.postMessage('isready'); }
-        else if (l === 'readyok') engine.ready = true;
+        else if (l === 'readyok') { if (!engine.ready) { engine.ready = true; settled = true; clearTimeout(timer); } }
         else if (l.indexOf('info ') === 0 && l.indexOf(' pv ') > 0 && l.indexOf(' multipv ') > 0 && l.indexOf('bound') < 0) {
           var mp = +l.split(' multipv ')[1].split(' ')[0], pvs = l.split(' pv ')[1].split(' '), mv = pvs[0], o = { uci: mv, pv: pvs };
           if (l.indexOf(' score mate ') > 0) o.mate = +l.split(' score mate ')[1].split(' ')[0];
@@ -1876,9 +1881,12 @@ const BOOK_EXTRA_B = [
           if (cb) { var out = []; for (var k = 1; k <= 4; k++) if (engine.lines[k]) out.push(engine.lines[k]); cb(out); }
         }
       };
-      w.onerror = function () { engine.failed = true; var cb = engine.cb; engine.cb = null; if (cb) cb(null); };
+      w.onerror = function () {
+        if (!engine.ready) { clearTimeout(timer); fallback(); return; }
+        engine.failed = true; var cb = engine.cb; engine.cb = null; if (cb) cb(null);
+      };
       w.postMessage('uci');
-    } catch (e) { engine.failed = true; }
+    } catch (e) { if (strong) { settled = true; engineStart('stockfish.js'); } else engine.failed = true; }
   }
   function analyse(ms, g, only) {
     g = g || game;
@@ -1967,7 +1975,7 @@ const BOOK_EXTRA_B = [
   /* One sentence for a story: "After Bxe6 fxe6, b4 traps Black's bishop on c5." */
   function storyText(st) {
     if (!st.kind) return '';
-    if (st.kind === 'win') return 'The line ' + st.line.join(' ') + ' wins material.';
+    if (st.kind === 'win') return 'The line ' + st.line.slice(0, 4).join(' ') + (st.line.length > 4 ? ' ...' : '') + ' wins material.';
     return (st.i > 0 ? 'After ' + st.line.slice(0, st.i).join(' ') + ', ' : '') + st.san + ' ' + st.desc + '.';
   }
   function explainMove(m) {
@@ -2399,7 +2407,7 @@ const BOOK_EXTRA_B = [
     var g0 = new Chess(fenBefore), best = l0 ? uciMove(new Chess(fenBefore), l0.uci) : null;
     var st0 = l0 ? pvStory(l0.pv || [], 8, g0) : { kind: null };
     if (best && best.san !== mv.san && st0.kind && st0.kind !== 'win') return W('You missed ' + best.san + ': ' + storyText(st0).replace(/^After /, 'after '), fenBefore, st0.line.slice(0, st0.i + 1), [], st0.sq ? [st0.sq] : []);
-    if (st.kind === 'win') return W('That lets ' + ON() + ' win material: ' + st.line.join(' ') + '.', fenAfter, st.line);
+    if (st.kind === 'win') return W('That lets ' + ON() + ' win material, starting with ' + st.line[0] + '.', fenAfter, st.line.slice(0, 6));
     if (mv.piece === 'k' && mv.from === S('e1') && mv.san.indexOf('O-O') < 0) return W('Your king gives up castling and stays in the middle.', fenBefore, [], [[S('e1'), S('g1'), 'p']]);
     var home = rm && (rm.color === 'w' ? '1' : '8');
     var tempo = rm && !rm.captured && (rm.piece === 'p' || ((rm.piece === 'n' || rm.piece === 'b') && rm.from[1] === home));
@@ -2444,7 +2452,7 @@ const BOOK_EXTRA_B = [
       if (drop < 110 || (after >= 400 && drop < 400)) return { level: null, drop: drop };
       var g = new Chess(game.fen()), rm = a1[0].uci ? uciMove(g, a1[0].uci) : null;
       var why = whyBad(mv, fenBefore, a0[0], a1[0].uci ? a1[0] : null, drop), best = uciMove(new Chess(fenBefore), a0[0].uci);
-      if (!why && drop < 300) return { level: null, drop: drop };
+      if (!why && drop < (engine.strong ? 200 : 300)) return { level: null, drop: drop };
       var gl = whyLine;
       if (!why) {
         why = 'Costs about ' + (drop / 100).toFixed(1) + ' pawns of advantage' + (best ? '. ' + best.san + ' was stronger.' : '.');
@@ -2675,7 +2683,7 @@ const BOOK_EXTRA_B = [
   if (hot && hot.snapshot) hot.snapshot(function () { return { mode: mode, li: li, si: Math.min(si, LESSONS[li].steps.length - 1) }; });
   if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
 
-  window.__trainer = { state: function () { return { mode: mode, side: side, li: li, si: si, locked: locked, focus: focus ? focus.name : null, why: !!spar.why, peeking: !!peekSave, glevel: store.glevel, fen: game.fen(), over: lessonOver, tap: nextTap(), why: whyOpen }; }, engine: function () { return { ready: engine.ready, failed: engine.failed }; }, show: function (fen) { setGame(new Chess(fen)); var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return (m && m.san) + ' / ' + f.name + ' / quick: ' + suggestMove(f).san; }); }, best: function () { var r = repHere(); if (r) return mainOf(r.s); var m = suggestMove(focus || chooseFocus()); return m && m.san; }, verdict: function (fen, san) { run++; setGame(new Chess(fen)); var pre = analyse(450); var mv = game.move(san); var p0 = punish(game, mv); return engineVerdict(pre, mv, p0).then(function (p) { return 'simple check: ' + (p0 ? p0.text : 'none') + ' => final: ' + (p ? p.text + ' (' + p.move.san + ')' : 'no alarm'); }); }, sparAt: function (moves) { setMode('spar'); run++; var g = new Chess(); moves.split(' ').forEach(function (m) { g.move(m); }); resetRibbon(0); setGame(g); spar.over = false; locked = false; draw(); preAnalyse(); guideNow(); }, raw: function (fen, ms) { setGame(new Chess(fen)); return analyse(ms).then(function (r) { return (r || []).map(function (l) { return l.uci + ' ' + (l.mate != null ? 'M' + l.mate : l.cp) + ' | ' + (l.pv || []).slice(0, 5).join(' '); }); }); }, judgeAt: function (moves, san) { run++; var g = new Chess(); moves.split(' ').forEach(function (m) { g.move(m); }); setGame(g); var fen = g.fen(), pre = analyse(450); var mv = game.move(san); return judge(mv, fen, pre, punish(game, mv)).then(function (j) { return j ? (j.level || 'fine') + ' (' + j.drop + ') ' + (j.text || '') + (j.glimpse ? '  >> PEEK: ' + j.glimpse.sans.join(' ') + ' | ' + j.glimpse.caption : '') : 'none'; }); }, story: function (fen) { run++; setGame(new Chess(fen)); return analyse(900).then(function (res) { var f = chooseFocus(); var t = tacticFocus(res, f); return { focus: f.name, tactic: t && { text: t.text, why: t.why, after: t.after() }, best: res[0] && storyText(pvStory(res[0].pv, 6)) }; }); }, show: function (fen) { run++; setGame(new Chess(fen)); locked = false; var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return explainMove(m).then(function (ex) { return (m.engine ? 'engine ' : 'fallback ') + m.san + ' |' + ex.text + ' | ' + ex.line.join(' '); }); }); }, engineReady: function () { return engine.ready && !engine.failed; }, botSearch: botSearch, suggest: function (fen) { setGame(new Chess(fen)); return suggestMove(chooseFocus()).san + ' / ' + chooseFocus().name; }, peek: function (fen) { setGame(new Chess(fen)); locked = false; focusEl.hidden = false; focusEl.textContent = ''; var h = worstPieceHint(), out = []; h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(marks)); h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(arrows)); return out; } };
+  window.__trainer = { state: function () { return { mode: mode, side: side, li: li, si: si, locked: locked, focus: focus ? focus.name : null, why: !!spar.why, peeking: !!peekSave, glevel: store.glevel, fen: game.fen(), over: lessonOver, tap: nextTap(), why: whyOpen }; }, engine: function () { return { ready: engine.ready, failed: engine.failed }; }, show: function (fen) { setGame(new Chess(fen)); var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return (m && m.san) + ' / ' + f.name + ' / quick: ' + suggestMove(f).san; }); }, best: function () { var r = repHere(); if (r) return mainOf(r.s); var m = suggestMove(focus || chooseFocus()); return m && m.san; }, verdict: function (fen, san) { run++; setGame(new Chess(fen)); var pre = analyse(450); var mv = game.move(san); var p0 = punish(game, mv); return engineVerdict(pre, mv, p0).then(function (p) { return 'simple check: ' + (p0 ? p0.text : 'none') + ' => final: ' + (p ? p.text + ' (' + p.move.san + ')' : 'no alarm'); }); }, sparAt: function (moves) { setMode('spar'); run++; var g = new Chess(); moves.split(' ').forEach(function (m) { g.move(m); }); resetRibbon(0); setGame(g); spar.over = false; locked = false; draw(); preAnalyse(); guideNow(); }, raw: function (fen, ms) { setGame(new Chess(fen)); return analyse(ms).then(function (r) { return (r || []).map(function (l) { return l.uci + ' ' + (l.mate != null ? 'M' + l.mate : l.cp) + ' | ' + (l.pv || []).slice(0, 5).join(' '); }); }); }, judgeAt: function (moves, san) { run++; var g = new Chess(); moves.split(' ').forEach(function (m) { g.move(m); }); setGame(g); var fen = g.fen(), pre = analyse(450); var mv = game.move(san); return judge(mv, fen, pre, punish(game, mv)).then(function (j) { return j ? (j.level || 'fine') + ' (' + j.drop + ') ' + (j.text || '') + (j.glimpse ? '  >> PEEK: ' + j.glimpse.sans.join(' ') + ' | ' + j.glimpse.caption : '') : 'none'; }); }, story: function (fen) { run++; setGame(new Chess(fen)); return analyse(900).then(function (res) { var f = chooseFocus(); var t = tacticFocus(res, f); return { focus: f.name, tactic: t && { text: t.text, why: t.why, after: t.after() }, best: res[0] && storyText(pvStory(res[0].pv, 6)) }; }); }, show: function (fen) { run++; setGame(new Chess(fen)); locked = false; var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return explainMove(m).then(function (ex) { return (m.engine ? 'engine ' : 'fallback ') + m.san + ' |' + ex.text + ' | ' + ex.line.join(' '); }); }); }, engineReady: function () { return engine.ready && !engine.failed; }, engineName: function () { return engine.strong ? 'sf19' : 'sf10'; }, botSearch: botSearch, suggest: function (fen) { setGame(new Chess(fen)); return suggestMove(chooseFocus()).san + ' / ' + chooseFocus().name; }, peek: function (fen) { setGame(new Chess(fen)); locked = false; focusEl.hidden = false; focusEl.textContent = ''; var h = worstPieceHint(), out = []; h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(marks)); h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(arrows)); return out; } };
 })();
 
 </script>
