@@ -218,6 +218,7 @@ h1 em{font-weight:500;color:var(--accent)}
 .peekcap.top.on{transform:none}
 .btn.peek{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .btn.peek.ready{border-color:var(--hot);color:var(--hot)}
+.btn.answer.off{opacity:.35;pointer-events:none}
 .btn.peek.held{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .focus.tell .fname strong{font-size:24px}
 .focus .fname strong{margin:4px 0 6px}
@@ -301,7 +302,7 @@ h1 em{font-weight:500;color:var(--accent)}
 </svg>
 
 <div class="wrap">
-  <span class="ver" id="ver">v1.10</span>
+  <span class="ver" id="ver">v1.11</span>
   <header class="top">
     <div>
       <span class="eyebrow">1.e4 e5 2.Nf3 Nc6 3.Bc4</span>
@@ -1320,7 +1321,7 @@ const BOOK_EXTRA_B = [
   function sqAt(e) { var t = document.elementFromPoint(e.clientX, e.clientY); t = t && t.closest ? t.closest('.sq') : null; return t ? t.dataset.sq : null; }
   function onDown(e) {
     audio();
-    if (peekSave) return;
+    if (peekSave || ansSave) return;
     if (tapQ) { var ts = sqAt(e); if (ts) tapAnswer(ts); return; }
     if (locked || game.turn() !== side) return;
     var sq = sqAt(e); if (!sq) return;
@@ -2373,7 +2374,7 @@ const BOOK_EXTRA_B = [
     draw(); return true;
   }
   async function botMove(first) {
-    var my = run; spar.why = null; peekEnd(); locked = true; draw();
+    var my = run; spar.why = null; peekEnd(); answerEnd(); locked = true; draw();
     await wait(first ? 600 : 350); if (my !== run) return;
     var san;
     if (side === 'b') san = whiteBotMove();
@@ -2543,10 +2544,29 @@ const BOOK_EXTRA_B = [
   }
   /* Peek: while held, shows what Show me would draw, or after a mistake, how it goes wrong. */
   var peekSave = null;
-  function peekHint() { var pk = $('#peek'); if (pk) pk.classList.toggle('ready', !!spar.why); }
+  function peekHint() { var pk = $('#peek'); if (pk) pk.classList.toggle('ready', !!spar.why); var an = $('#answer'); if (an) an.classList.toggle('off', !!spar.why); }
+  /* Answer: while held, shows the move itself (the lesson move, or the engine's best). */
+  var ansSave = null, ansTok = 0;
+  function answerStart(e) {
+    if (e) { e.preventDefault(); try { e.target.setPointerCapture(e.pointerId); } catch (x) {} }
+    if (ansSave || peekSave || mode !== 'spar' || locked || spar.why || spar.over || game.turn() !== side) return;
+    var tok = ++ansTok, f = focus, fen = game.fen();
+    ansSave = { arrows: arrows, marks: marks, hint: hintSq };
+    var an = $('#answer'); if (an) an.classList.add('held');
+    function show(m) { if (tok !== ansTok || !ansSave || game.fen() !== fen || !m) return; arrows = [[m.from, m.to, 'p']]; marks = []; hintSq = m.from; draw(); peekCap('Answer: ' + m.san); }
+    var r = repHere();
+    if (r) { var g = new Chess(fen); show(g.move(mainOf(r.s))); return; }
+    peekCap('Thinking...');
+    bestMove(f || chooseFocus()).then(show);
+  }
+  function answerEnd() {
+    ansTok++; var an = $('#answer'); if (an) an.classList.remove('held');
+    if (!ansSave) return;
+    var s0 = ansSave; ansSave = null; arrows = s0.arrows; marks = s0.marks; hintSq = s0.hint; peekCap(''); draw();
+  }
   function peekStart(e) {
     if (e) { e.preventDefault(); try { e.target.setPointerCapture(e.pointerId); } catch (x) {} }
-    if (peekSave || mode !== 'spar') return;
+    if (peekSave || ansSave || mode !== 'spar') return;
     var gl = spar.why, f = focus;
     var save = { game: game, last: lastMove, arrows: arrows, marks: marks, badge: badge, hint: hintSq };
     if (gl) {
@@ -2630,7 +2650,7 @@ const BOOK_EXTRA_B = [
       cb.addEventListener('change', function () { store.coach = cb.checked; save(); });
       c.appendChild(cb); c.appendChild(el('span', '', 'Blunder check: stop me when my move loses material.'));
       rail.appendChild(c);
-      rail.appendChild(el('p', '', 'Guide (button under the board): tap it to change the level. Show me: the principle with its arrows. Ask me: you pick it from three. Tell me: only the aim, nothing drawn. Hold Peek to glimpse the arrows, or after a mistake to see how it goes wrong.'));
+      rail.appendChild(el('p', '', 'Guide (button under the board): tap it to change the level. Show me: the principle with its arrows. Ask me: you pick it from three. Tell me: only the aim, nothing drawn. Hold Peek for a hint, or after a mistake to see how it goes wrong. Hold Answer to see the move itself.'));
       rail.appendChild(el('p', '', 'A sloppy opponent: it sees simple captures and sometimes plays a random move.'));
     }
   }
@@ -2647,7 +2667,14 @@ const BOOK_EXTRA_B = [
       pk.addEventListener('contextmenu', function (e) { e.preventDefault(); });
       pk.addEventListener('keydown', function (e) { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); peekStart(); } });
       pk.addEventListener('keyup', function (e) { if (e.key === ' ' || e.key === 'Enter') peekEnd(); });
-      u.appendChild(pk); peekHint();
+      u.appendChild(pk);
+      var an = el('button', 'btn peek answer', 'Hold for answer'); an.type = 'button'; an.id = 'answer'; an.dataset.short = 'Answer';
+      an.addEventListener('pointerdown', answerStart);
+      ['pointerup', 'pointercancel', 'pointerleave', 'lostpointercapture'].forEach(function (ev) { an.addEventListener(ev, answerEnd); });
+      an.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+      an.addEventListener('keydown', function (e) { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); answerStart(); } });
+      an.addEventListener('keyup', function (e) { if (e.key === ' ' || e.key === 'Enter') answerEnd(); });
+      u.appendChild(an); peekHint();
       btn('Take back a move', sparUndo, 'Undo');
       var gb = btn(GLABEL[store.glevel], function () {
         store.glevel = store.glevel % 4 + 1; store.guide = store.glevel < 4; store.gstreak = 0; store.gmiss = 0; save(); renderUnder();
@@ -2703,7 +2730,7 @@ const BOOK_EXTRA_B = [
   if (hot && hot.snapshot) hot.snapshot(function () { return { mode: mode, li: li, si: Math.min(si, LESSONS[li].steps.length - 1) }; });
   if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
 
-  window.__trainer = { state: function () { return { mode: mode, side: side, li: li, si: si, locked: locked, focus: focus ? focus.name : null, why: !!spar.why, peeking: !!peekSave, glevel: store.glevel, fen: game.fen(), over: lessonOver, tap: nextTap(), why: whyOpen }; }, engine: function () { return { ready: engine.ready, failed: engine.failed }; }, show: function (fen) { setGame(new Chess(fen)); var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return (m && m.san) + ' / ' + f.name + ' / quick: ' + suggestMove(f).san; }); }, best: function () { var r = repHere(); if (r) return mainOf(r.s); var m = suggestMove(focus || chooseFocus()); return m && m.san; }, verdict: function (fen, san) { run++; setGame(new Chess(fen)); var pre = analyse(450); var mv = game.move(san); var p0 = punish(game, mv); return engineVerdict(pre, mv, p0).then(function (p) { return 'simple check: ' + (p0 ? p0.text : 'none') + ' => final: ' + (p ? p.text + ' (' + p.move.san + ')' : 'no alarm'); }); }, sparAt: function (moves) { setMode('spar'); run++; var g = new Chess(); moves.split(' ').forEach(function (m) { g.move(m); }); resetRibbon(0); setGame(g); spar.over = false; locked = false; draw(); preAnalyse(); guideNow(); }, raw: function (fen, ms) { setGame(new Chess(fen)); return analyse(ms).then(function (r) { return (r || []).map(function (l) { return l.uci + ' ' + (l.mate != null ? 'M' + l.mate : l.cp) + ' | ' + (l.pv || []).slice(0, 5).join(' '); }); }); }, judgeAt: function (moves, san) { run++; var g = new Chess(); moves.split(' ').forEach(function (m) { g.move(m); }); setGame(g); var fen = g.fen(), pre = analyse(450); var mv = game.move(san); return judge(mv, fen, pre, punish(game, mv)).then(function (j) { return j ? (j.level || 'fine') + ' (' + j.drop + ') ' + (j.text || '') + (j.glimpse ? '  >> PEEK: ' + j.glimpse.sans.join(' ') + ' | ' + j.glimpse.caption : '') : 'none'; }); }, story: function (fen) { run++; setGame(new Chess(fen)); return analyse(900).then(function (res) { var f = chooseFocus(); var t = tacticFocus(res, f); return { focus: f.name, tactic: t && { text: t.text, why: t.why, after: t.after() }, best: res[0] && storyText(pvStory(res[0].pv, 6)) }; }); }, show: function (fen) { run++; setGame(new Chess(fen)); locked = false; var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return explainMove(m).then(function (ex) { return (m.engine ? 'engine ' : 'fallback ') + m.san + ' |' + ex.text + ' | ' + ex.line.join(' '); }); }); }, engineReady: function () { return engine.ready && !engine.failed; }, engineName: function () { return engine.strong ? 'sf19' : 'sf10'; }, botSearch: botSearch, suggest: function (fen) { setGame(new Chess(fen)); return suggestMove(chooseFocus()).san + ' / ' + chooseFocus().name; }, peek: function (fen) { setGame(new Chess(fen)); locked = false; focusEl.hidden = false; focusEl.textContent = ''; var h = worstPieceHint(), out = []; h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(marks)); h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(arrows)); return out; } };
+  window.__trainer = { state: function () { return { mode: mode, side: side, li: li, si: si, locked: locked, focus: focus ? focus.name : null, why: !!spar.why, peeking: !!peekSave, answering: !!ansSave, glevel: store.glevel, fen: game.fen(), over: lessonOver, tap: nextTap(), why: whyOpen }; }, engine: function () { return { ready: engine.ready, failed: engine.failed }; }, show: function (fen) { setGame(new Chess(fen)); var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return (m && m.san) + ' / ' + f.name + ' / quick: ' + suggestMove(f).san; }); }, best: function () { var r = repHere(); if (r) return mainOf(r.s); var m = suggestMove(focus || chooseFocus()); return m && m.san; }, verdict: function (fen, san) { run++; setGame(new Chess(fen)); var pre = analyse(450); var mv = game.move(san); var p0 = punish(game, mv); return engineVerdict(pre, mv, p0).then(function (p) { return 'simple check: ' + (p0 ? p0.text : 'none') + ' => final: ' + (p ? p.text + ' (' + p.move.san + ')' : 'no alarm'); }); }, sparAt: function (moves) { setMode('spar'); run++; var g = new Chess(); moves.split(' ').forEach(function (m) { g.move(m); }); resetRibbon(0); setGame(g); spar.over = false; locked = false; draw(); preAnalyse(); guideNow(); }, raw: function (fen, ms) { setGame(new Chess(fen)); return analyse(ms).then(function (r) { return (r || []).map(function (l) { return l.uci + ' ' + (l.mate != null ? 'M' + l.mate : l.cp) + ' | ' + (l.pv || []).slice(0, 5).join(' '); }); }); }, judgeAt: function (moves, san) { run++; var g = new Chess(); moves.split(' ').forEach(function (m) { g.move(m); }); setGame(g); var fen = g.fen(), pre = analyse(450); var mv = game.move(san); return judge(mv, fen, pre, punish(game, mv)).then(function (j) { return j ? (j.level || 'fine') + ' (' + j.drop + ') ' + (j.text || '') + (j.glimpse ? '  >> PEEK: ' + j.glimpse.sans.join(' ') + ' | ' + j.glimpse.caption : '') : 'none'; }); }, story: function (fen) { run++; setGame(new Chess(fen)); return analyse(900).then(function (res) { var f = chooseFocus(); var t = tacticFocus(res, f); return { focus: f.name, tactic: t && { text: t.text, why: t.why, after: t.after() }, best: res[0] && storyText(pvStory(res[0].pv, 6)) }; }); }, show: function (fen) { run++; setGame(new Chess(fen)); locked = false; var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return explainMove(m).then(function (ex) { return (m.engine ? 'engine ' : 'fallback ') + m.san + ' |' + ex.text + ' | ' + ex.line.join(' '); }); }); }, engineReady: function () { return engine.ready && !engine.failed; }, engineName: function () { return engine.strong ? 'sf19' : 'sf10'; }, botSearch: botSearch, suggest: function (fen) { setGame(new Chess(fen)); return suggestMove(chooseFocus()).san + ' / ' + chooseFocus().name; }, peek: function (fen) { setGame(new Chess(fen)); locked = false; focusEl.hidden = false; focusEl.textContent = ''; var h = worstPieceHint(), out = []; h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(marks)); h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(arrows)); return out; } };
 })();
 
 </script>
