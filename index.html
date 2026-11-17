@@ -240,7 +240,7 @@ h1 em{font-weight:500;color:var(--accent)}
   .sub:empty{display:block}
   .focus{order:14;padding:0;border:0;background:none;min-height:66px}
   .stage.focus-on .slot,.stage.focus-on .sub{display:none}
-  .stage.focus-on .lastv{display:block;order:15;margin:0;font-size:12.5px;line-height:1.35;min-height:17px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stage.focus-on .lastv{display:block;order:9;margin:0;font-size:12.5px;line-height:1.35;min-height:17px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .lastv.good{color:var(--accent)} .lastv.ok{color:var(--amber)} .lastv.bad{color:var(--hot)}
   .focus{min-height:44px}
   .focus .eyebrow,.focus.quiz>strong{display:none}
@@ -1748,21 +1748,22 @@ const BOOK_EXTRA_B = [
     } catch (e) { return null; }
   }
   var focus = null, focusEl = $('#focus');
-  var PRINCIPLES = ['Repetition', 'Safety', 'Checks first', 'Free material', 'King safety', 'Activity', 'Attack the king', 'Trade when ahead', 'Open lines', 'Small improvements'];
+  var PRINCIPLES = ['Repetition', 'Safety', 'Checks first', 'Free material', 'Tactic', 'King safety', 'Activity', 'Attack the king', 'Trade when ahead', 'Open lines', 'Small improvements'];
   var GLABEL = ['', 'Guide: show me', 'Guide: ask me', 'Guide: ask me (hard)', 'Guide: off'];
   function showFocus(f) {
     focus = f; focusEl.textContent = ''; focusEl.className = 'focus';
     focusEl.hidden = !f; $('#stage').classList.toggle('focus-on', !!f); $('#mlabel-r').textContent = f ? (f.name === 'Your opening' ? 'From your lessons' : 'Your priority') : '';
     if (!f) return;
     var lastEl = $('#last'), kind = (slotEl.className.match(/good|ok|bad/) || [''])[0];
-    lastEl.className = 'lastv ' + kind; lastEl.textContent = kind ? ((kind === 'good' ? '\u2713 ' : '') + slotEl.textContent + (subEl.textContent ? '  \u00b7  ' + subEl.textContent : '')) : '';
+    var hh = game.history(), myLast = hh.length >= 2 ? hh[hh.length - 2] : '';
+    lastEl.className = 'lastv ' + kind; lastEl.textContent = kind ? (myLast ? myLast + ': ' : '') + ((kind === 'good' ? '\u2713 ' : '') + slotEl.textContent + (subEl.textContent ? '  \u00b7  ' + subEl.textContent : '')) : '';
     if (store.glevel === 1 || f.name === 'Your opening') revealFocus(f); else quizFocus(f);
   }
   function quizFocus(f) {
     var first = true, names;
     if (store.glevel === 3) names = PRINCIPLES.slice();
     else {
-      var pool = PRINCIPLES.filter(function (n) { return n !== f.name && !(f.name === 'Activity' && n === 'Small improvements') && !(f.name === 'Small improvements' && n === 'Activity') && !(f.name === 'Free material' && n === 'Checks first') && !(f.name === 'Checks first' && n === 'Free material'); });
+      var pool = PRINCIPLES.filter(function (n) { return n !== f.name && !(f.name === 'Activity' && n === 'Small improvements') && !(f.name === 'Small improvements' && n === 'Activity') && !(f.name === 'Free material' && n === 'Checks first') && !(f.name === 'Checks first' && n === 'Free material') && !(f.name === 'Tactic' && (n === 'Free material' || n === 'Checks first')) && !((f.name === 'Free material' || f.name === 'Checks first') && n === 'Tactic'); });
       pool.sort(function () { return Math.random() - 0.5; });
       names = [f.name, pool[0], pool[1]].sort(function () { return Math.random() - 0.5; });
     }
@@ -1806,7 +1807,8 @@ const BOOK_EXTRA_B = [
       bestMove(f).then(function (m) {
         if (focus !== f || !m) { return; }
         arrows = [[m.from, m.to, 'p']]; marks = []; hintSq = m.from; draw();
-        var lead = (m.engine ? 'Best move here: ' : 'One good move here: ') + m.san + '.';
+        var off = m.engine && f.met && !m.met && f.name !== 'Your opening' && f.name !== 'Tactic';
+        var lead = (off ? 'Better than ' + f.name.toLowerCase() + ' here: ' : m.engine ? 'Best move here: ' : 'One good move here: ') + m.san + '.';
         hintLine(lead);
         var fen = game.fen();
         explainMove(m).then(function (ex) {
@@ -1838,7 +1840,7 @@ const BOOK_EXTRA_B = [
         var l = String(e.data);
         if (l === 'uciok') { w.postMessage('setoption name MultiPV value 4'); w.postMessage('isready'); }
         else if (l === 'readyok') engine.ready = true;
-        else if (l.indexOf('info ') === 0 && l.indexOf(' pv ') > 0 && l.indexOf(' multipv ') > 0) {
+        else if (l.indexOf('info ') === 0 && l.indexOf(' pv ') > 0 && l.indexOf(' multipv ') > 0 && l.indexOf('bound') < 0) {
           var mp = +l.split(' multipv ')[1].split(' ')[0], pvs = l.split(' pv ')[1].split(' '), mv = pvs[0], o = { uci: mv, pv: pvs };
           if (l.indexOf(' score mate ') > 0) o.mate = +l.split(' score mate ')[1].split(' ')[0];
           else if (l.indexOf(' score cp ') > 0) o.cp = +l.split(' score cp ')[1].split(' ')[0];
@@ -1874,15 +1876,79 @@ const BOOK_EXTRA_B = [
   function uciMove(g, u) { return g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] || 'q' }); }
   function clampScore(x) { return Math.max(-2000, Math.min(2000, x)); }
   /* Why the suggested move works when it looks like it loses something, plus a short line to play through. */
+  /* Best gain for the side to move from capturing on sq (recapture counted). */
+  function capGain(g, sq) {
+    var best = -99;
+    g.moves({ verbose: true }).forEach(function (m) {
+      if (m.to !== sq || !m.captured) return;
+      g.move(m); var re = g.moves({ verbose: true }).some(function (x) { return x.to === sq && x.captured; }); g.undo();
+      var v = VAL[m.captured] - (re ? VAL[m.piece] : 0); if (v > best) best = v;
+    });
+    return best;
+  }
+  function guarded(g, sq, color) { for (var n in sqEls) { var p = g.get(n); if (p && p.color === color && n !== sq && attacksFrom(n, g).indexOf(sq) >= 0) return true; } return false; }
+  function whose(color) { return color === side ? 'your' : (color === 'w' ? 'White' : 'Black') + '\'s'; }
+  /* An attacked piece of the side to move that has no safe square. */
+  function trappedIn(g) {
+    if (g.in_check()) return null;
+    var v = g.turn(), fl = flip(g); if (!fl) return null;
+    for (var n in sqEls) {
+      var p = g.get(n); if (!p || p.color !== v || 'nbrq'.indexOf(p.type) < 0) continue;
+      if (capGain(fl, n) <= 0) continue;
+      var out = true;
+      g.moves({ square: n, verbose: true }).forEach(function (m) {
+        if (!out) return;
+        g.move(m); var loss = capGain(g, m.to); g.undo();
+        if (loss - (m.captured ? VAL[m.captured] : 0) <= 0) out = false;
+      });
+      if (out) return { sq: n, type: p.type, color: v };
+    }
+    return null;
+  }
+  /* A move that attacks two worthwhile targets at once. g is after the move m. */
+  function forkBy(g, m) {
+    var t = [];
+    attacksFrom(m.to, g).forEach(function (sq) {
+      var q = g.get(sq); if (!q || q.color === m.color || q.type === 'p') return;
+      if (q.type === 'k' || VAL[q.type] > VAL[m.piece] || !guarded(g, sq, q.color)) t.push(q.type);
+    });
+    return t.length >= 2 ? t : null;
+  }
+  /* Walks an engine line and names the first thing that happens in it. */
+  function pvStory(pv, plies, g0) {
+    var g = new Chess((g0 || game).fen()), mover = g.turn(), out = { line: [], kind: null }, start = 0;
+    g.board().forEach(function (r) { r.forEach(function (p) { if (p) start += (p.color === mover ? 1 : -1) * VAL[p.type]; }); });
+    for (var i = 0; i < Math.min(plies, (pv || []).length); i++) {
+      var x = uciMove(g, pv[i]); if (!x) break;
+      out.line.push(x.san);
+      if (x.san.indexOf('#') >= 0) { out.kind = 'mate'; out.i = i; out.san = x.san; out.desc = 'is checkmate'; break; }
+      if (x.color !== mover) continue;
+      var tr = trappedIn(g);
+      if (tr) { out.kind = 'trap'; out.i = i; out.san = x.san; out.sq = tr.sq; out.desc = 'traps ' + whose(tr.color) + ' ' + NAME[tr.type] + ' on ' + tr.sq; break; }
+      var fk = forkBy(g, x);
+      if (fk) { out.kind = 'fork'; out.i = i; out.san = x.san; out.sq = x.to; var names = fk.map(function (k) { return NAME[k]; }); out.desc = 'forks ' + (x.color === side ? ON() + '\'s ' : 'your ') + names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]; break; }
+    }
+    if (!out.kind) {
+      var end = 0; g.board().forEach(function (r) { r.forEach(function (p) { if (p) end += (p.color === mover ? 1 : -1) * VAL[p.type]; }); });
+      if (end - start >= 2 && out.line.length % 2 === 0) { out.kind = 'win'; out.i = out.line.length - 1; out.san = out.line[out.i]; out.desc = 'wins material'; }
+    }
+    return out;
+  }
+  /* One sentence for a story: "After Bxe6 fxe6, b4 traps Black's bishop on c5." */
+  function storyText(st) {
+    if (!st.kind) return '';
+    if (st.kind === 'win') return 'The line ' + st.line.join(' ') + ' wins material.';
+    return (st.i > 0 ? 'After ' + st.line.slice(0, st.i).join(' ') + ', ' : '') + st.san + ' ' + st.desc + '.';
+  }
   function explainMove(m) {
     var g = new Chess(game.fen()), mv = g.move({ from: m.from, to: m.to, promotion: 'q' });
     var out = { text: '', line: [mv.san] };
     if (!mv) return Promise.resolve(out);
     var p = punish(g, mv);
     function fromPv() {
-      var g2 = new Chess(game.fen()), sans = [], pv = (m.pv || []).slice(0, 3);
-      for (var i = 0; i < pv.length; i++) { var x = uciMove(g2, pv[i]); if (!x) break; sans.push(x.san); }
-      if (sans.length > 1) out.line = sans;
+      var st = pvStory(m.pv || [], 6);
+      if (st.kind) { out.text = ' ' + storyText(st); out.line = st.line.slice(0, Math.max(3, st.i + 1)); }
+      else if (st.line.length > 1) out.line = st.line.slice(0, 3);
       return out;
     }
     if (!p || g.in_checkmate()) return Promise.resolve(fromPv());
@@ -1920,7 +1986,7 @@ const BOOK_EXTRA_B = [
       if (p && drop < 120) p = null;
       if (!p && drop >= 300 && after < 500) {
         var g = new Chess(game.fen()), rm = uciMove(g, a1[0].uci);
-        if (rm) return { move: rm, text: 'That gives ' + ON() + ' a strong reply.' };
+        if (rm) { var st = pvStory(a1[0].pv || [], 6); return { move: rm, text: 'That allows ' + rm.san + '.' + (st.kind && st.i > 0 ? ' ' + storyText(st) : st.kind ? ' It ' + st.desc + '.' : '') }; }
       }
       return p;
     });
@@ -2150,9 +2216,36 @@ const BOOK_EXTRA_B = [
       met: function (m) { return ps.some(function (pl) { return pl.arrows[0][0] === m.from && pl.arrows[0][1] === m.to; }); }, done: 'Plan under way.' };
     return { name: 'Activity', text: 'Nothing urgent. Find the piece of yours that reaches the fewest squares and give it a better one.', why: 'A piece that reaches few squares is not attacking or defending much.', chips: [worstPieceHint()], met: function () { return false; } };
   }
+  /* When the engine sees a tactic the simple rules missed, it takes over the box. */
+  function tacticFocus(res, f) {
+    var top = res[0]; if (!top || !top.pv) return null;
+    if (top.mate != null && top.mate <= 0) return null;
+    var sc = lineScore(top);
+    if (!(top.mate > 0) && sc - material() * 100 < 200) return null;
+    var g = new Chess(game.fen()), first = uciMove(g, top.uci); if (!first) return null;
+    try { if (f && f.met && f.met(first)) return null; } catch (e) {}
+    var st = pvStory(top.pv, 6); if (!st.kind) return null;
+    var ok = res.filter(function (l) { return sc - lineScore(l) <= 80; }).map(function (l) { return l.uci.slice(0, 4); });
+    var tp = st.sq && game.get(st.sq);
+    var look = st.kind === 'trap' && tp ? 'Look at ' + whose(tp.color) + ' ' + NAME[tp.type] + ' on ' + st.sq + '. Where can it go?'
+      : st.kind === 'fork' ? 'Look for a move that attacks two things at once.'
+      : st.kind === 'mate' ? 'Look at every check.' : 'Look at what ' + ON() + '\'s last move left loose.';
+    return { name: 'Tactic', text: st.kind === 'mate' ? 'There is a forced checkmate here.' : ON() + '\'s last move gives you a way to win material.',
+      why: st.kind === 'trap' ? 'A piece with no safe square can be won by attacking it.' : st.kind === 'fork' ? 'A double attack wins whatever cannot be saved.' : 'Checks, captures and threats come before plans.',
+      marks: [], arrows: [],
+      chips: [stepHint([{ marks: st.kind === 'trap' && tp ? [st.sq] : [], text: look }, { marks: st.kind === 'trap' && tp ? [st.sq] : [], arrows: [[first.from, first.to, 'p']], text: 'Start with ' + first.san + '.' }])],
+      met: function (m) { return ok.indexOf(m.from + m.to) >= 0; }, done: 'On the hunt.', after: function () { return storyText(st).replace(/\.$/, ''); } };
+  }
   function guideNow() {
     if (mode !== 'spar' || !store.guide || spar.over || game.turn() !== side) { showFocus(null); return; }
-    showFocus(chooseFocus());
+    var f = chooseFocus(), pre = spar.pre, my = run, fen = game.fen();
+    if (!pre || !engine.ready || engine.failed || ['Repetition', 'Safety', 'Checks first', 'Free material', 'Your opening'].indexOf(f.name) >= 0) { showFocus(f); return; }
+    showFocus(null);
+    Promise.race([pre, new Promise(function (r) { setTimeout(r, 1500); })]).then(function (res) {
+      if (my !== run || game.fen() !== fen || mode !== 'spar' || !store.guide || spar.over) return;
+      var t = null; try { t = res && res.length ? tacticFocus(res, f) : null; } catch (e) {}
+      showFocus(t || f);
+    });
   }
   function preAnalyse() { spar.pre = mode === 'spar' && !spar.over && game.turn() === side ? analyse(450) : null; }
   /* Pushing the f- or g-pawn (or h4) in front of a castled king. */
@@ -2418,7 +2511,7 @@ const BOOK_EXTRA_B = [
   if (hot && hot.snapshot) hot.snapshot(function () { return { mode: mode, li: li, si: Math.min(si, LESSONS[li].steps.length - 1) }; });
   if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
 
-  window.__trainer = { state: function () { return { mode: mode, side: side, li: li, si: si, locked: locked, focus: focus ? focus.name : null, fen: game.fen(), over: lessonOver, tap: nextTap(), why: whyOpen }; }, engine: function () { return { ready: engine.ready, failed: engine.failed }; }, show: function (fen) { setGame(new Chess(fen)); var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return (m && m.san) + ' / ' + f.name + ' / quick: ' + suggestMove(f).san; }); }, best: function () { var r = repHere(); if (r) return mainOf(r.s); var m = suggestMove(focus || chooseFocus()); return m && m.san; }, verdict: function (fen, san) { run++; setGame(new Chess(fen)); var pre = analyse(450); var mv = game.move(san); var p0 = punish(game, mv); return engineVerdict(pre, mv, p0).then(function (p) { return 'simple check: ' + (p0 ? p0.text : 'none') + ' => final: ' + (p ? p.text + ' (' + p.move.san + ')' : 'no alarm'); }); }, show: function (fen) { run++; setGame(new Chess(fen)); locked = false; var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return explainMove(m).then(function (ex) { return (m.engine ? 'engine ' : 'fallback ') + m.san + ' |' + ex.text + ' | ' + ex.line.join(' '); }); }); }, engineReady: function () { return engine.ready && !engine.failed; }, botSearch: botSearch, suggest: function (fen) { setGame(new Chess(fen)); return suggestMove(chooseFocus()).san + ' / ' + chooseFocus().name; }, peek: function (fen) { setGame(new Chess(fen)); locked = false; focusEl.hidden = false; focusEl.textContent = ''; var h = worstPieceHint(), out = []; h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(marks)); h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(arrows)); return out; } };
+  window.__trainer = { state: function () { return { mode: mode, side: side, li: li, si: si, locked: locked, focus: focus ? focus.name : null, fen: game.fen(), over: lessonOver, tap: nextTap(), why: whyOpen }; }, engine: function () { return { ready: engine.ready, failed: engine.failed }; }, show: function (fen) { setGame(new Chess(fen)); var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return (m && m.san) + ' / ' + f.name + ' / quick: ' + suggestMove(f).san; }); }, best: function () { var r = repHere(); if (r) return mainOf(r.s); var m = suggestMove(focus || chooseFocus()); return m && m.san; }, verdict: function (fen, san) { run++; setGame(new Chess(fen)); var pre = analyse(450); var mv = game.move(san); var p0 = punish(game, mv); return engineVerdict(pre, mv, p0).then(function (p) { return 'simple check: ' + (p0 ? p0.text : 'none') + ' => final: ' + (p ? p.text + ' (' + p.move.san + ')' : 'no alarm'); }); }, sparAt: function (moves) { setMode('spar'); run++; var g = new Chess(); moves.split(' ').forEach(function (m) { g.move(m); }); resetRibbon(0); setGame(g); spar.over = false; locked = false; draw(); preAnalyse(); guideNow(); }, raw: function (fen, ms) { setGame(new Chess(fen)); return analyse(ms).then(function (r) { return (r || []).map(function (l) { return l.uci + ' ' + (l.mate != null ? 'M' + l.mate : l.cp) + ' | ' + (l.pv || []).slice(0, 5).join(' '); }); }); }, story: function (fen) { run++; setGame(new Chess(fen)); return analyse(900).then(function (res) { var f = chooseFocus(); var t = tacticFocus(res, f); return { focus: f.name, tactic: t && { text: t.text, why: t.why, after: t.after() }, best: res[0] && storyText(pvStory(res[0].pv, 6)) }; }); }, show: function (fen) { run++; setGame(new Chess(fen)); locked = false; var f = chooseFocus(); focus = f; return bestMove(f).then(function (m) { return explainMove(m).then(function (ex) { return (m.engine ? 'engine ' : 'fallback ') + m.san + ' |' + ex.text + ' | ' + ex.line.join(' '); }); }); }, engineReady: function () { return engine.ready && !engine.failed; }, botSearch: botSearch, suggest: function (fen) { setGame(new Chess(fen)); return suggestMove(chooseFocus()).san + ' / ' + chooseFocus().name; }, peek: function (fen) { setGame(new Chess(fen)); locked = false; focusEl.hidden = false; focusEl.textContent = ''; var h = worstPieceHint(), out = []; h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(marks)); h.go(); out.push(focusEl.textContent + ' ' + JSON.stringify(arrows)); return out; } };
 })();
 
 </script>
