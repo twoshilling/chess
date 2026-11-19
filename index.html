@@ -308,7 +308,7 @@ h1 em{font-weight:500;color:var(--accent)}
 </svg>
 
 <div class="wrap">
-  <span class="ver" id="ver">v1.12</span>
+  <span class="ver" id="ver">v1.13</span>
   <header class="top">
     <div>
       <span class="eyebrow">1.e4 e5 2.Nf3 Nc6 3.Bc4</span>
@@ -1782,9 +1782,10 @@ const BOOK_EXTRA_B = [
     focus = f; focusEl.textContent = ''; focusEl.className = 'focus';
     focusEl.hidden = !f; $('#stage').classList.toggle('focus-on', !!f); $('#mlabel-r').textContent = f ? (f.name === 'Your opening' ? 'From your lessons' : 'Your priority') : '';
     if (!f) return;
-    var lastEl = $('#last'), kind = (slotEl.className.match(/good|ok|bad/) || [''])[0];
+    var lv = mode === 'spar' && spar.lastV, lastEl = $('#last'), kind = lv ? lv.kind : (slotEl.className.match(/good|ok|bad/) || [''])[0];
+    var vText = lv ? lv.text : slotEl.textContent, vSub = lv ? lv.sub : subEl.textContent;
     var hh = game.history(), myLast = hh.length >= 2 ? hh[hh.length - 2] : '';
-    lastEl.className = 'lastv ' + kind; lastEl.textContent = kind ? (myLast ? myLast + ': ' : '') + ((kind === 'good' ? '\u2713 ' : '') + slotEl.textContent + (subEl.textContent ? '  \u00b7  ' + subEl.textContent : '')) : '';
+    lastEl.className = 'lastv ' + kind; lastEl.textContent = kind ? (myLast ? myLast + ': ' : '') + ((kind === 'good' ? '\u2713 ' : '') + vText + (vSub ? '  \u00b7  ' + vSub : '')) : '';
     if (store.glevel === 3) tellFocus(f); else if (store.glevel === 1 || f.name === 'Your opening') revealFocus(f); else quizFocus(f);
   }
   function quizFocus(f) {
@@ -2260,8 +2261,17 @@ const BOOK_EXTRA_B = [
     }
     var asleep = null;
     [['g1', 'n'], ['b1', 'n'], ['f1', 'b'], ['c1', 'b']].forEach(function (h) { var hs = S(h[0]), p = game.get(hs); if (!asleep && p && p.color === side && p.type === h[1]) asleep = hs; });
-    if (asleep) return { name: 'Activity', text: 'This piece is not playing yet. Give it a job.', why: 'You have ' + developed(side) + ' of your 4 knights and bishops out. ' + ON() + ' has ' + developed(opp()) + '.', marks: [[asleep, 'p']], asleep: asleep, met: function (m) { return m.from === asleep; }, done: 'Another piece in the game.', d0: developed(side),
-      after: function () { return 'pieces out, ' + this.d0 + ' to ' + developed(side) + ' of 4.'; }, still: function () { return 'that piece is still at home.'; } };
+    /* a sleeping piece that cannot move yet is woken by the pawn move that frees it */
+    var stuck = asleep && !game.moves({ square: asleep }).length, mob0 = asleep ? mobility(asleep) : 0, frees = [];
+    if (stuck) game.moves({ verbose: true }).forEach(function (m) {
+      if (m.piece !== 'p') return;
+      game.move(m); var gain = mobility(asleep) - mob0, bad = punish(game, m); game.undo();
+      if (gain > 0 && !bad) frees.push({ m: m, gain: gain });
+    });
+    frees.sort(function (a, b) { return b.gain - a.gain; });
+    var aType = asleep ? NAME[game.get(asleep).type] : '';
+    if (asleep) return { name: 'Activity', text: stuck ? 'Your ' + aType + ' on ' + asleep + ' is stuck behind a pawn. Free it.' : 'This piece is not playing yet. Give it a job.', peek: frees.length ? { arrows: [[frees[0].m.from, frees[0].m.to, 'p']] } : null, why: 'You have ' + developed(side) + ' of your 4 knights and bishops out. ' + ON() + ' has ' + developed(opp()) + '.', marks: [[asleep, 'p']], asleep: asleep, met: function (m) { return m.from === asleep || (m.piece === 'p' && !!game.get(asleep) && mobility(asleep) > mob0); }, done: 'Another piece in the game.', d0: developed(side),
+      after: function (m) { return m && m.from !== asleep ? 'your ' + aType + ' on ' + asleep + ' can now come out.' : 'pieces out, ' + this.d0 + ' to ' + developed(side) + ' of 4.'; }, still: function () { return 'that piece is still at home.'; } };
     var bk = blackKingExposed();
     var kh = null;
     if (bk) {
@@ -2367,7 +2377,7 @@ const BOOK_EXTRA_B = [
     return out;
   }
   function newSpar() {
-    run++; spar.alarms = 0; spar.over = false; spar.why = null; showFocus(null);
+    run++; spar.alarms = 0; spar.over = false; spar.why = null; spar.lastV = null; showFocus(null);
     var g = new Chess();
     if (side === 'w') ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4'].forEach(function (m) { g.move(m); });
     else spar.fam = FAMILY[pick(FAMPICK[spar.wopen] || FAMPICK.any)];
@@ -2410,6 +2420,9 @@ const BOOK_EXTRA_B = [
     if (side === 'b') san = whiteBotMove();
     else { var opts = game.history().length === 5 ? FIRST[spar.opening] : BOOK[posKey(game)]; if (opts && opts.length) san = pick(opts); else san = botSearch(); }
     var m = playSan(san);
+    /* keep the verdict on your move for the small line above the board, then clear the prompt */
+    var vk = (slotEl.className.match(/good|ok|bad/) || [''])[0];
+    spar.lastV = vk ? { kind: vk, text: slotEl.textContent, sub: subEl.textContent } : null;
     setSlot('', ''); setSub('');
     say(m.color === 'b' ? 'black' : 'white', '', m.san);
     if (gameOver()) return;
@@ -2586,11 +2599,33 @@ const BOOK_EXTRA_B = [
     var tok = ++ansTok, f = focus, fen = game.fen();
     ansSave = { arrows: arrows, marks: marks, hint: hintSq };
     var an = $('#answer'); if (an) an.classList.add('held');
-    function show(m) { if (tok !== ansTok || !ansSave || game.fen() !== fen || !m) return; arrows = [[m.from, m.to, 'p']]; marks = []; hintSq = m.from; draw(); peekCap('Answer: ' + m.san); }
+    function show(m) {
+      if (tok !== ansTok || !ansSave || game.fen() !== fen || !m) return;
+      arrows = [[m.from, m.to, 'p']]; marks = []; hintSq = m.from; draw();
+      var off = f && f.met && m.engine && !m.met && f.name !== 'Your opening' && f.name !== 'Tactic';
+      peekCap('Answer: ' + m.san + (off ? ' (beats ' + f.name.toLowerCase() + '). ' + ideaWords(m) : ''));
+    }
     var r = repHere();
     if (r) { var g = new Chess(fen); show(g.move(mainOf(r.s))); return; }
     peekCap('Thinking...');
     bestMove(f || chooseFocus()).then(show);
+  }
+  /* What a suggested move is for, in words: "Your knight goes to d5 and eyes Black's knight on f6, ready for Nxf6+." */
+  function ideaWords(m) {
+    var st = pvStory(m.pv || [], 4);
+    if (near(st)) return storyText(st, 1);
+    var g = new Chess(game.fen()), mv = g.move({ from: m.from, to: m.to, promotion: 'q' }); if (!mv) return '';
+    var eyes = attacksFrom(mv.to, g).filter(function (sq) { var p = g.get(sq); return p && p.color !== side && p.type !== 'p' && p.type !== 'k'; })
+      .map(function (sq) { return owner(opp()) + ' ' + NAME[g.get(sq).type] + ' on ' + sq; });
+    var next = null;
+    if (m.pv && m.pv.length >= 3) { var g2 = new Chess(g.fen()), r1 = uciMove(g2, m.pv[1]); if (r1) { var n2 = uciMove(g2, m.pv[2]); if (n2 && (n2.captured || n2.san.indexOf('+') >= 0)) next = n2.san; } }
+    /* was the piece under attack before it moved? */
+    var g0 = new Chess(game.fen()), fl = flip(g0), hitBy = null;
+    if (fl) for (var q in sqEls) { var ap = g0.get(q); if (ap && ap.color !== side && attacksFrom(q, g0).indexOf(m.from) >= 0 && (!hitBy || VAL[ap.type] < VAL[hitBy])) hitBy = ap.type; }
+    var lead = hitBy && mv.piece !== 'p' && mv.piece !== 'k' && VAL[hitBy] <= VAL[mv.piece]
+      ? 'Your ' + NAME[mv.piece] + ' was attacked by ' + owner(opp()) + ' ' + NAME[hitBy] + ', and ' + mv.to + ' keeps it safe and active'
+      : cap1(moveWords(mv));
+    return lead + (eyes.length ? (hitBy ? ', eyeing ' : ' and eyes ') + listNames2(eyes) : '') + (next ? ', ready for ' + next : '') + '.';
   }
   function answerEnd() {
     ansTok++; var an = $('#answer'); if (an) an.classList.remove('held');
